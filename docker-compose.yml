@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: dvf
+      POSTGRES_USER: dvf
+      POSTGRES_PASSWORD: dvf
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dvf -d dvf"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://dvf:dvf@db:5432/dvf
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "main.py", "--server.address=0.0.0.0", "--server.port=8501"]
+
+volumes:
+  db_data:

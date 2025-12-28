@@ -39,16 +39,17 @@ Application web Streamlit qui affiche et explore les données de transactions im
 - Placer le GeoJSON arrondissements dans `data/geo/`.
 
 2) Préparer l’ETL
-- Script `etl/download.py` : fetch DVF + sauvegarde dans `data/raw/`.
-- Script `etl/clean_load.py` : nettoyage, calcul prix_m2, insertion Postgres (COPY pour la vitesse). Index sur date_mutation, code_postal, type_local. PostGIS : colonne geometry et index GIST.
+- `python -m etl.download` : télécharge le DVF (met à jour DVF_URL si besoin) vers `data/raw/dvf.csv`.
+- `python -m etl.clean_load` : nettoie et insère dans Postgres (calc prix_m2, indices déjà dans init-db.sql). BDD via `DATABASE_URL`.
 
-3) Configurer la BDD
-- Créer Postgres via docker-compose (voir à rédiger) avec variables env : POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD.
-- Option : `docker/init-db.sql` pour créer schéma + extensions PostGIS.
+3) Docker / BDD
+- `docker-compose up --build` lance PostGIS + Streamlit (voir [docker-compose.yml](docker-compose.yml)).
+- Variables env : `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DATABASE_URL`. Exemple dans [.env.example](.env.example). Copier en `.env`.
+- Init PostGIS + table `transactions` via [docker/init-db.sql](docker/init-db.sql).
 
 4) Lancer l’app
-- Mode local simple : `streamlit run main.py`
-- Mode docker (après rédaction des fichiers) : `docker-compose up --build`
+- Local (sans docker) : `streamlit run main.py` (assure-toi que `DATABASE_URL` pointe vers ta BDD ou qu’un sample data existe).
+- Docker : `docker-compose up --build` puis http://localhost:8501.
 
 ## Variables d’environnement (à prévoir)
 - `DATABASE_URL` ou `POSTGRES_*`
