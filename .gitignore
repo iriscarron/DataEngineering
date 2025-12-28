@@ -1,0 +1,22 @@
+.env
+.env.*
+venv/
+.envrc
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.db
+.DS_Store
+.ipynb_checkpoints/
+
+# data
+/data/*
+!/data/.gitkeep
+
+# streamlit
+.streamlit/
+
+# vscode
+.vscode/
