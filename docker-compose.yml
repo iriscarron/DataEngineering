@@ -27,13 +27,8 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://dvf:dvf@db:5432/dvf
-    env_file:
-      - .env
-    volumes:
-      - ./:/app
     ports:
       - "8501:8501"
-    command: ["streamlit", "run", "main.py", "--server.address=0.0.0.0", "--server.port=8501"]
 
 volumes:
   db_data:
