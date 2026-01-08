@@ -14,6 +14,17 @@ from datetime import datetime
 # URL de base de l'API DVF+
 API_BASE_URL = "https://apidf-preprod.cerema.fr/dvf_opendata/mutations/"
 
+# Coordonnees approximatives des arrondissements de Paris (centre)
+COORDS_ARRONDISSEMENTS = {
+    "1": (48.8600, 2.3470), "2": (48.8680, 2.3410), "3": (48.8650, 2.3610),
+    "4": (48.8540, 2.3570), "5": (48.8460, 2.3500), "6": (48.8490, 2.3340),
+    "7": (48.8560, 2.3150), "8": (48.8740, 2.3110), "9": (48.8770, 2.3370),
+    "10": (48.8760, 2.3590), "11": (48.8600, 2.3790), "12": (48.8400, 2.3880),
+    "13": (48.8310, 2.3550), "14": (48.8330, 2.3270), "15": (48.8420, 2.2990),
+    "16": (48.8630, 2.2760), "17": (48.8870, 2.3030), "18": (48.8920, 2.3440),
+    "19": (48.8820, 2.3820), "20": (48.8640, 2.3980),
+}
+
 
 def creer_session_http():
     """Cree une session HTTP avec retry automatique"""
@@ -73,7 +84,7 @@ def get_mutations_commune(code_insee, annee_min="2020", annee_max="2024", sessio
                     return resultats
 
                 page += 1
-                time.sleep(0.5)
+                time.sleep(0.1)
                 break
 
             except requests.exceptions.RequestException as e:
@@ -105,7 +116,7 @@ def scrape_paris(annee_min="2020", annee_max="2024"):
         mutations = get_mutations_commune(code_insee, annee_min, annee_max, session)
         toutes_mutations.extend(mutations)
 
-        time.sleep(1)
+        time.sleep(0.2)
 
     print("-" * 50)
     print(f"Total mutations: {len(toutes_mutations)}")
@@ -179,11 +190,21 @@ def transformer_donnees(df):
             lambda x: f"750{str(x)[-2:]}" if pd.notna(x) else None
         )
 
-    # Coordonnees GPS
-    if "latitude" in df.columns:
-        transformed["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
-    if "longitude" in df.columns:
-        transformed["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
+    # Coordonnees GPS (basees sur l'arrondissement avec decalage aleatoire)
+    import random
+    def get_coords_arr(arr):
+        if arr and str(arr) in COORDS_ARRONDISSEMENTS:
+            lat, lon = COORDS_ARRONDISSEMENTS[str(arr)]
+            # Ajouter un decalage aleatoire (environ 500m)
+            lat += random.uniform(-0.004, 0.004)
+            lon += random.uniform(-0.005, 0.005)
+            return lat, lon
+        return None, None
+
+    if "arrondissement" in transformed.columns:
+        coords = transformed["arrondissement"].apply(get_coords_arr)
+        transformed["latitude"] = coords.apply(lambda x: x[0])
+        transformed["longitude"] = coords.apply(lambda x: x[1])
 
     # ID mutation
     if "idmutation" in df.columns:
@@ -237,6 +258,25 @@ def vider_table(table_name="transactions"):
     print(f"Table {table_name} videe")
 
 
+def indexer_elasticsearch(df):
+    """
+    Indexe les donnees dans Elasticsearch
+    """
+    try:
+        from etl.elasticsearch_utils import attendre_elasticsearch, creer_index, indexer_transactions
+
+        print("\n[4/4] Indexation Elasticsearch...")
+        if attendre_elasticsearch(max_tentatives=10, delai=3):
+            creer_index()
+            indexer_transactions(df)
+        else:
+            print("Elasticsearch non disponible, indexation ignoree")
+    except ImportError:
+        print("Module Elasticsearch non disponible")
+    except Exception as e:
+        print(f"Erreur indexation Elasticsearch: {e}")
+
+
 def run_scraper(annee_min="2020", annee_max="2024", vider_avant=True):
     """
     Fonction principale pour executer le pipeline ETL complet
@@ -245,24 +285,23 @@ def run_scraper(annee_min="2020", annee_max="2024", vider_avant=True):
     print("DVF+ Paris Scraper")
     print("=" * 60)
 
-    # Etape 1: Scraper les donnees
-    print("\n[1/3] Scraping depuis l'API DVF+...")
+    print("\n[1/4] Scraping depuis l'API DVF+...")
     raw_df = scrape_paris(annee_min, annee_max)
 
     if raw_df.empty:
         print("Aucune donnee recuperee.")
         return
 
-    # Etape 2: Transformer les donnees
-    print("\n[2/3] Transformation des donnees...")
+    print("\n[2/4] Transformation des donnees...")
     transformed_df = transformer_donnees(raw_df)
     print(f"{len(transformed_df)} enregistrements valides")
 
-    # Etape 3: Charger en BDD
-    print("\n[3/3] Chargement en base de donnees...")
+    print("\n[3/4] Chargement en base de donnees PostgreSQL...")
     if vider_avant:
         vider_table()
     charger_en_bdd(transformed_df)
+
+    indexer_elasticsearch(transformed_df)
 
     print("\n" + "=" * 60)
     print("Scraping termine!")

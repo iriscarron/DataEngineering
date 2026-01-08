@@ -23,10 +23,10 @@ def verifier_donnees_existantes():
 
 
 def lancer_scraping():
-    """Lance le scraping des donnees DVF"""
+    """Lance le scraping des donnees DVF depuis l'API"""
     print("Pas de donnees en base, lancement du scraping...")
     from etl.scraper import run_scraper
-    run_scraper(annee_min="2023", annee_max="2024")
+    run_scraper(annee_min="2024", annee_max="2024")
 
 
 # Si on lance avec "python main.py", on verifie les donnees et on lance streamlit
@@ -256,6 +256,246 @@ def graphique_nature_mutation(df):
     return fig
 
 
+def carte_interactive(df):
+    """
+    Carte interactive des transactions immobilieres
+    """
+    if df.empty:
+        return None
+
+    # Filtrer les lignes avec coordonnees valides
+    df_carte = df.dropna(subset=["latitude", "longitude"]).copy()
+
+    if df_carte.empty:
+        return None
+
+    # Limiter le nombre de points pour les performances
+    if len(df_carte) > 2000:
+        df_carte = df_carte.sample(n=2000, random_state=42)
+
+    # Formater le prix pour l'affichage
+    df_carte["prix_affiche"] = df_carte["valeur_fonciere"].apply(
+        lambda x: f"{x/1e6:.2f}M" if x >= 1e6 else f"{x/1e3:.0f}k"
+    )
+
+    fig = px.scatter_mapbox(
+        df_carte,
+        lat="latitude",
+        lon="longitude",
+        color="prix_m2",
+        size="valeur_fonciere",
+        color_continuous_scale="RdYlGn_r",
+        size_max=15,
+        zoom=11,
+        center={"lat": 48.8566, "lon": 2.3522},
+        hover_name="type_local",
+        hover_data={
+            "arrondissement": True,
+            "prix_affiche": True,
+            "surface_reelle_bati": True,
+            "prix_m2": ":.0f",
+            "latitude": False,
+            "longitude": False,
+            "valeur_fonciere": False
+        },
+        labels={
+            "prix_m2": "Prix/m2",
+            "arrondissement": "Arr.",
+            "prix_affiche": "Prix",
+            "surface_reelle_bati": "Surface"
+        },
+        title="Carte des transactions immobilieres a Paris"
+    )
+
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        height=500
+    )
+
+    return fig
+
+
+@st.cache_data(show_spinner=False)
+def charger_geojson_arrondissements():
+    """
+    Charge le GeoJSON des arrondissements de Paris depuis OpenDataSoft
+    """
+    import requests
+    url = "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/arrondissements/exports/geojson"
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        return None
+
+
+def carte_choropleth(df):
+    """
+    Carte choroplethe des prix au m2 par arrondissement
+    """
+    if df.empty:
+        return None
+
+    geojson = charger_geojson_arrondissements()
+    if geojson is None:
+        return None
+
+    # Agreger les donnees par arrondissement
+    agg = df.groupby("arrondissement").agg({
+        "prix_m2": "median",
+        "valeur_fonciere": ["median", "count"],
+        "surface_reelle_bati": "median"
+    }).reset_index()
+    agg.columns = ["arrondissement", "prix_m2_median", "prix_median", "nb_transactions", "surface_mediane"]
+
+    # Formater le numero d'arrondissement pour correspondre au GeoJSON
+    agg["c_ar"] = agg["arrondissement"].apply(lambda x: str(int(x)) if pd.notna(x) else None)
+
+    # Formater les valeurs pour l'affichage
+    agg["prix_m2_affiche"] = agg["prix_m2_median"].apply(lambda x: f"{x:,.0f} euros/m2" if pd.notna(x) else "N/A")
+    agg["prix_affiche"] = agg["prix_median"].apply(lambda x: f"{x/1e6:.2f}M euros" if pd.notna(x) else "N/A")
+
+    fig = px.choropleth_mapbox(
+        agg,
+        geojson=geojson,
+        locations="c_ar",
+        featureidkey="properties.c_ar",
+        color="prix_m2_median",
+        color_continuous_scale="RdYlGn_r",
+        range_color=[agg["prix_m2_median"].quantile(0.1), agg["prix_m2_median"].quantile(0.9)],
+        mapbox_style="open-street-map",
+        zoom=11,
+        center={"lat": 48.8566, "lon": 2.3522},
+        opacity=0.7,
+        hover_name="arrondissement",
+        hover_data={
+            "c_ar": False,
+            "prix_m2_median": False,
+            "prix_m2_affiche": True,
+            "prix_affiche": True,
+            "nb_transactions": True,
+            "surface_mediane": ":.0f"
+        },
+        labels={
+            "prix_m2_affiche": "Prix/m2",
+            "prix_affiche": "Prix median",
+            "nb_transactions": "Transactions",
+            "surface_mediane": "Surface med."
+        },
+        title="Prix median au m2 par arrondissement"
+    )
+
+    fig.update_layout(
+        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        height=500,
+        coloraxis_colorbar=dict(
+            title="Prix/m2",
+            tickformat=",d"
+        )
+    )
+
+    return fig
+
+
+def moteur_recherche():
+    """
+    Interface de recherche Elasticsearch
+    """
+    try:
+        from etl.elasticsearch_utils import rechercher_transactions, elasticsearch_disponible
+
+        if not elasticsearch_disponible():
+            st.info("Moteur de recherche en cours d'initialisation...")
+            return
+
+        st.subheader("Recherche avancee")
+
+        col_search, col_filters = st.columns([2, 1])
+
+        with col_search:
+            query = st.text_input(
+                "Rechercher",
+                placeholder="Ex: appartement 16eme, maison 5 pieces, vente terrain...",
+                key="es_search"
+            )
+
+        with col_filters:
+            prix_range = st.select_slider(
+                "Budget max",
+                options=[100000, 250000, 500000, 750000, 1000000, 2000000, 5000000, 10000000],
+                value=2000000,
+                format_func=lambda x: f"{x/1e6:.1f}M" if x >= 1e6 else f"{x/1e3:.0f}k"
+            )
+
+        if query or st.button("Rechercher", key="btn_search"):
+            filtres = {"prix_max": prix_range}
+            resultats = rechercher_transactions(query, filtres=filtres, taille=50)
+
+            if resultats:
+                st.success(f"{len(resultats)} resultats trouves")
+
+                # Afficher les resultats sous forme de tableau
+                df_resultats = pd.DataFrame(resultats)
+
+                # Formater les colonnes pour l'affichage
+                colonnes_affichage = []
+                if "date_mutation" in df_resultats.columns:
+                    df_resultats["date_mutation"] = pd.to_datetime(df_resultats["date_mutation"]).dt.strftime("%d/%m/%Y")
+                    colonnes_affichage.append("date_mutation")
+
+                if "type_local" in df_resultats.columns:
+                    colonnes_affichage.append("type_local")
+
+                if "arrondissement" in df_resultats.columns:
+                    df_resultats["arrondissement"] = df_resultats["arrondissement"].apply(lambda x: f"{x}eme" if x else "")
+                    colonnes_affichage.append("arrondissement")
+
+                if "valeur_fonciere" in df_resultats.columns:
+                    df_resultats["prix"] = df_resultats["valeur_fonciere"].apply(
+                        lambda x: f"{x/1e6:.2f}M" if x and x >= 1e6 else f"{x/1e3:.0f}k" if x else ""
+                    )
+                    colonnes_affichage.append("prix")
+
+                if "surface_reelle_bati" in df_resultats.columns:
+                    df_resultats["surface"] = df_resultats["surface_reelle_bati"].apply(
+                        lambda x: f"{x:.0f} m2" if x else ""
+                    )
+                    colonnes_affichage.append("surface")
+
+                if "prix_m2" in df_resultats.columns:
+                    df_resultats["prix_m2_affiche"] = df_resultats["prix_m2"].apply(
+                        lambda x: f"{x:,.0f} euros/m2" if x else ""
+                    )
+                    colonnes_affichage.append("prix_m2_affiche")
+
+                if "nature_mutation" in df_resultats.columns:
+                    colonnes_affichage.append("nature_mutation")
+
+                st.dataframe(
+                    df_resultats[colonnes_affichage],
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "date_mutation": "Date",
+                        "type_local": "Type",
+                        "arrondissement": "Arr.",
+                        "prix": "Prix",
+                        "surface": "Surface",
+                        "prix_m2_affiche": "Prix/m2",
+                        "nature_mutation": "Nature"
+                    }
+                )
+            else:
+                st.warning("Aucun resultat trouve")
+
+    except ImportError:
+        st.info("Module Elasticsearch non disponible")
+    except Exception as e:
+        st.error(f"Erreur: {e}")
+
+
 def afficher_kpis(df):
     """
     Affiche les indicateurs cles en haut du dashboard
@@ -364,6 +604,30 @@ def main():
         df_filtre = df.copy()
 
     afficher_kpis(df_filtre)
+
+    st.divider()
+
+    # Moteur de recherche Elasticsearch
+    moteur_recherche()
+
+    st.divider()
+
+    # Cartes avec onglets
+    tab_choropleth, tab_points = st.tabs(["Carte par arrondissement", "Carte des transactions"])
+
+    with tab_choropleth:
+        fig_choro = carte_choropleth(df_filtre)
+        if fig_choro:
+            st.plotly_chart(fig_choro, use_container_width=True)
+        else:
+            st.info("Impossible de charger la carte des arrondissements")
+
+    with tab_points:
+        fig_carte = carte_interactive(df_filtre)
+        if fig_carte:
+            st.plotly_chart(fig_carte, use_container_width=True)
+        else:
+            st.info("Pas de coordonnees GPS disponibles pour afficher la carte")
 
     st.divider()
 
