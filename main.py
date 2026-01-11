@@ -324,9 +324,68 @@ def carte_interactive(df):
     return fig
 
 
-def carte_parcelles(df):
+def charger_historique_parcelle(id_parcelle):
+    """
+    Charge l'historique des transactions pour une parcelle
+    """
+    try:
+        engine = create_engine(DATABASE_URL)
+        query = f"""
+            SELECT id_mutation, date_mutation, nature_mutation, valeur_fonciere,
+                   type_local, surface_reelle_bati, nombre_pieces, adresse
+            FROM historique_transactions
+            WHERE id_parcelle = '{id_parcelle}'
+            ORDER BY date_mutation DESC
+        """
+        df = pd.read_sql(query, engine)
+        if "date_mutation" in df.columns:
+            df["date_mutation"] = pd.to_datetime(df["date_mutation"])
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(show_spinner="Chargement des parcelles...")
+def charger_parcelles(arrondissements=None):
+    """
+    Charge les parcelles depuis la table parcelles (cadastre complet + DVF)
+    """
+    try:
+        engine = create_engine(DATABASE_URL)
+
+        if arrondissements:
+            arr_list = ",".join([f"'{a}'" for a in arrondissements])
+            query = f"""
+                SELECT id, id_parcelle, geom_json, arrondissement, has_transaction,
+                       valeur_fonciere, prix_m2, type_local, surface_reelle_bati,
+                       date_mutation, nature_mutation, adresse, nb_transactions
+                FROM parcelles
+                WHERE arrondissement IN ({arr_list})
+            """
+        else:
+            query = """
+                SELECT id, id_parcelle, geom_json, arrondissement, has_transaction,
+                       valeur_fonciere, prix_m2, type_local, surface_reelle_bati,
+                       date_mutation, nature_mutation, adresse, nb_transactions
+                FROM parcelles
+            """
+
+        df = pd.read_sql(query, engine)
+        if "date_mutation" in df.columns:
+            df["date_mutation"] = pd.to_datetime(df["date_mutation"])
+        return df
+    except Exception as e:
+        st.error(f"Erreur chargement parcelles: {e}")
+        return pd.DataFrame()
+
+
+def carte_parcelles(df, show_no_transaction=True):
     """
     Carte interactive avec les polygones des parcelles cadastrales
+
+    Args:
+        df: DataFrame avec les parcelles
+        show_no_transaction: Si True, affiche aussi les parcelles sans vente (fond bleu)
     """
     import json
 
@@ -339,9 +398,17 @@ def carte_parcelles(df):
     if df_geo.empty:
         return None, None
 
-    # Limiter pour les performances
-    if len(df_geo) > 2000:
-        df_geo = df_geo.sample(n=2000, random_state=42).reset_index(drop=True)
+    # Limiter pour les performances (afficher plus de parcelles)
+    if len(df_geo) > 5000:
+        # Garder toutes les parcelles avec transaction + echantillon des autres
+        df_with_tx = df_geo[df_geo["has_transaction"] == True]
+        df_without_tx = df_geo[df_geo["has_transaction"] == False]
+        if len(df_with_tx) < 5000:
+            remaining = 5000 - len(df_with_tx)
+            df_without_sample = df_without_tx.sample(n=min(remaining, len(df_without_tx)), random_state=42)
+            df_geo = pd.concat([df_with_tx, df_without_sample]).reset_index(drop=True)
+        else:
+            df_geo = df_with_tx.sample(n=5000, random_state=42).reset_index(drop=True)
 
     # Construire le GeoJSON FeatureCollection
     features = []
@@ -352,28 +419,44 @@ def carte_parcelles(df):
             if not geom or "coordinates" not in geom:
                 continue
 
-            # Formater le prix pour l'affichage
-            prix = row["valeur_fonciere"]
-            prix_affiche = f"{prix/1e6:.2f}M euros" if prix >= 1e6 else f"{prix/1e3:.0f}k euros"
-            prix_m2 = row["prix_m2"]
-            prix_m2_affiche = f"{prix_m2:,.0f} euros/m2" if pd.notna(prix_m2) else "N/A"
+            has_tx = row.get("has_transaction", False)
+
+            if has_tx and pd.notna(row.get("valeur_fonciere")):
+                # Parcelle avec transaction
+                prix = row["valeur_fonciere"]
+                prix_affiche = f"{prix/1e6:.2f}M euros" if prix >= 1e6 else f"{prix/1e3:.0f}k euros"
+                prix_m2 = row["prix_m2"]
+                prix_m2_affiche = f"{prix_m2:,.0f} euros/m2" if pd.notna(prix_m2) else "N/A"
+                surface = row["surface_reelle_bati"] if pd.notna(row["surface_reelle_bati"]) else 0
+                type_local = row["type_local"] or "Bien immobilier"
+                date_str = row["date_mutation"].strftime("%d/%m/%Y") if pd.notna(row["date_mutation"]) else "N/A"
+            else:
+                # Parcelle sans transaction
+                prix = 0
+                prix_affiche = "Pas de vente"
+                prix_m2 = -1  # Valeur speciale pour parcelles sans transaction
+                prix_m2_affiche = "N/A"
+                surface = 0
+                type_local = "Parcelle cadastrale"
+                date_str = "N/A"
 
             feature = {
                 "type": "Feature",
-                "id": idx,  # Use DataFrame index as ID
+                "id": idx,
                 "geometry": geom,
                 "properties": {
                     "idx": idx,
-                    "db_id": int(row["id"]) if pd.notna(row.get("id")) else idx,
+                    "id_parcelle": row.get("id_parcelle", ""),
+                    "has_transaction": has_tx,
                     "prix": prix,
                     "prix_affiche": prix_affiche,
-                    "prix_m2": prix_m2 if pd.notna(prix_m2) else 0,
+                    "prix_m2": prix_m2 if pd.notna(prix_m2) and prix_m2 > 0 else 0,
                     "prix_m2_affiche": prix_m2_affiche,
-                    "surface": row["surface_reelle_bati"] if pd.notna(row["surface_reelle_bati"]) else 0,
-                    "type_local": row["type_local"] or "N/A",
-                    "arrondissement": row["arrondissement"] or "N/A",
-                    "date": row["date_mutation"].strftime("%d/%m/%Y") if pd.notna(row["date_mutation"]) else "N/A",
-                    "nature": row["nature_mutation"] or "Vente"
+                    "surface": surface,
+                    "type_local": type_local,
+                    "arrondissement": row.get("arrondissement") or "N/A",
+                    "date": date_str,
+                    "adresse": row.get("adresse") or ""
                 }
             }
             features.append(feature)
@@ -414,61 +497,106 @@ def carte_parcelles(df):
     else:
         center_lat, center_lon = 48.8566, 2.3522
 
-    # Extraire les valeurs pour la coloration
-    prix_m2_values = [f["properties"]["prix_m2"] for f in features]
-    ids = list(range(len(features)))  # Simple sequential IDs
+    # Separer les parcelles avec et sans transaction
+    features_with_tx = [f for f in features if f["properties"]["has_transaction"]]
+    features_without_tx = [f for f in features if not f["properties"]["has_transaction"]]
 
-    # Calculer les bornes de couleur
-    valid_prices = [p for p in prix_m2_values if p > 0]
-    if valid_prices:
-        zmin = np.percentile(valid_prices, 5)
-        zmax = np.percentile(valid_prices, 95)
+    fig = go.Figure()
+
+    # 1. Parcelles SANS transaction (contours bleus) - si active
+    if show_no_transaction and features_without_tx:
+        geojson_no_tx = {"type": "FeatureCollection", "features": features_without_tx}
+        ids_no_tx = [f["id"] for f in features_without_tx]
+
+        fig.add_trace(go.Choroplethmapbox(
+            geojson=geojson_no_tx,
+            locations=ids_no_tx,
+            z=[0] * len(features_without_tx),
+            colorscale=[[0, "rgba(200, 200, 255, 0.3)"], [1, "rgba(200, 200, 255, 0.3)"]],
+            marker_opacity=0.4,
+            marker_line_width=0.8,
+            marker_line_color="darkblue",
+            showscale=False,
+            hovertemplate=(
+                "<b>Parcelle %{customdata[0]}</b><br>"
+                "Arr: %{customdata[1]}e<br>"
+                "Pas de vente enregistree<br>"
+                "<extra></extra>"
+            ),
+            customdata=[[
+                f["properties"]["id_parcelle"],
+                f["properties"]["arrondissement"]
+            ] for f in features_without_tx],
+            name="Sans vente"
+        ))
+
+    # 2. Parcelles AVEC transaction (colorees par prix/m2)
+    if features_with_tx:
+        geojson_tx = {"type": "FeatureCollection", "features": features_with_tx}
+        ids_tx = [f["id"] for f in features_with_tx]
+        prix_m2_values = [f["properties"]["prix_m2"] for f in features_with_tx]
+
+        # Calculer les bornes de couleur
+        valid_prices = [p for p in prix_m2_values if p > 0]
+        if valid_prices:
+            zmin = np.percentile(valid_prices, 10)
+            zmax = np.percentile(valid_prices, 90)
+        else:
+            zmin, zmax = 3000, 15000
+
+        fig.add_trace(go.Choroplethmapbox(
+            geojson=geojson_tx,
+            locations=ids_tx,
+            z=prix_m2_values,
+            colorscale="RdYlGn_r",
+            zmin=zmin,
+            zmax=zmax,
+            marker_opacity=0.8,
+            marker_line_width=1,
+            marker_line_color="darkred",
+            colorbar=dict(
+                title="Prix/m2",
+                tickformat=",d",
+                ticksuffix=" euros",
+                len=0.8
+            ),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "Parcelle: %{customdata[6]}<br>"
+                "Prix: %{customdata[1]}<br>"
+                "Prix/m2: %{customdata[2]}<br>"
+                "Surface: %{customdata[3]:.0f} m2<br>"
+                "Arr: %{customdata[4]}e<br>"
+                "Date: %{customdata[5]}<br>"
+                "<extra></extra>"
+            ),
+            customdata=[[
+                f["properties"]["type_local"],
+                f["properties"]["prix_affiche"],
+                f["properties"]["prix_m2_affiche"],
+                f["properties"]["surface"],
+                f["properties"]["arrondissement"],
+                f["properties"]["date"],
+                f["properties"]["id_parcelle"]
+            ] for f in features_with_tx],
+            name="Avec vente"
+        ))
+
+    # Titre dynamique
+    if show_no_transaction:
+        title = f"Parcelles cadastrales - {len(features_with_tx)} ventes / {len(features)} parcelles"
     else:
-        zmin, zmax = 0, 15000
-
-    # Creer la figure
-    fig = go.Figure(go.Choroplethmapbox(
-        geojson=geojson,
-        locations=ids,
-        z=prix_m2_values,
-        colorscale="RdYlGn_r",
-        zmin=zmin,
-        zmax=zmax,
-        marker_opacity=0.7,
-        marker_line_width=0.5,
-        marker_line_color="darkblue",
-        colorbar=dict(
-            title="Prix/m2",
-            tickformat=",d",
-            ticksuffix=" euros"
-        ),
-        hovertemplate=(
-            "<b>%{customdata[0]}</b><br>"
-            "Prix: %{customdata[1]}<br>"
-            "Prix/m2: %{customdata[2]}<br>"
-            "Surface: %{customdata[3]:.0f} m2<br>"
-            "Arr: %{customdata[4]}e<br>"
-            "Date: %{customdata[5]}<br>"
-            "<extra></extra>"
-        ),
-        customdata=[[
-            f["properties"]["type_local"],
-            f["properties"]["prix_affiche"],
-            f["properties"]["prix_m2_affiche"],
-            f["properties"]["surface"],
-            f["properties"]["arrondissement"],
-            f["properties"]["date"]
-        ] for f in features]
-    ))
+        title = f"Ventes immobilieres - {len(features_with_tx)} transactions"
 
     fig.update_layout(
         mapbox_style="open-street-map",
-        mapbox_zoom=13,
+        mapbox_zoom=14,
         mapbox_center={"lat": center_lat, "lon": center_lon},
         margin={"r": 0, "t": 40, "l": 0, "b": 0},
-        height=650,
-        title="Carte des parcelles cadastrales - Survolez pour les details",
-        uirevision="parcelles"
+        height=700,
+        title=title,
+        uirevision="parcelles",
+        showlegend=False
     )
 
     return fig, df_geo
@@ -793,20 +921,149 @@ def main():
     }
 
     with tab_parcelles:
-        # Verifier si des geometries sont disponibles
-        has_geom = "geom_json" in df_filtre.columns and df_filtre["geom_json"].notna().any()
+        st.subheader("Carte cadastrale avec ventes DVF")
 
-        if has_geom:
-            fig_parcelles, df_geo = carte_parcelles(df_filtre)
-            if fig_parcelles:
-                st.plotly_chart(fig_parcelles, use_container_width=True, config=map_config)
-                st.caption(f"{len(df_geo)} parcelles affichees - Survolez une parcelle pour voir les details")
-            else:
-                st.warning("Impossible de generer la carte des parcelles")
+        # Controles en ligne
+        col_arr, col_toggle, col_search = st.columns([2, 2, 2])
+
+        with col_arr:
+            arr_parcelles = st.selectbox(
+                "Arrondissement",
+                options=[str(i) for i in range(1, 21)],
+                index=3,  # 4eme par defaut
+                key="arr_parcelles"
+            )
+
+        with col_toggle:
+            show_all_parcels = st.toggle(
+                "Afficher toutes les parcelles",
+                value=True,
+                help="Affiche les parcelles sans vente en fond bleu"
+            )
+
+        with col_search:
+            search_parcelle = st.text_input(
+                "Rechercher parcelle",
+                placeholder="Ex: 75104000AF0061",
+                key="search_parcelle"
+            )
+
+        arr_list = [arr_parcelles]
+
+        # Charger les parcelles
+        df_parcelles = charger_parcelles(tuple(arr_list))
+
+        if not df_parcelles.empty:
+            # Layout: carte + panneau details
+            col_map, col_details = st.columns([3, 1])
+
+            with col_map:
+                fig_parcelles, df_geo = carte_parcelles(df_parcelles, show_no_transaction=show_all_parcels)
+
+                if fig_parcelles:
+                    # Afficher la carte avec selection
+                    selected = st.plotly_chart(
+                        fig_parcelles,
+                        use_container_width=True,
+                        config=map_config,
+                        on_select="rerun",
+                        key="map_parcelles"
+                    )
+
+            with col_details:
+                st.markdown("### Details")
+
+                # Gerer la recherche de parcelle
+                parcelle_found = None
+                if search_parcelle:
+                    match = df_geo[df_geo["id_parcelle"].str.contains(search_parcelle.upper(), na=False)]
+                    if not match.empty:
+                        parcelle_found = match.iloc[0]
+                        st.success(f"Parcelle trouvee!")
+                    else:
+                        st.warning("Parcelle non trouvee")
+
+                # Gerer le clic sur la carte
+                elif selected and hasattr(selected, 'selection') and selected.selection:
+                    points = selected.selection.get('points', [])
+                    if points:
+                        point = points[0]
+                        # Recuperer l'index de la parcelle
+                        point_idx = point.get('pointIndex', point.get('point_index'))
+                        if point_idx is not None and point_idx < len(df_geo):
+                            parcelle_found = df_geo.iloc[point_idx]
+
+                # Afficher les details de la parcelle
+                if parcelle_found is not None:
+                    row = parcelle_found
+                    id_parcelle = row.get('id_parcelle', '')
+
+                    st.markdown(f"**Parcelle:**")
+                    st.code(id_parcelle)
+
+                    if row.get('has_transaction'):
+                        # Charger l'historique complet
+                        historique = charger_historique_parcelle(id_parcelle)
+
+                        if not historique.empty:
+                            st.markdown("---")
+                            st.markdown(f"#### Historique ({len(historique)} vente{'s' if len(historique) > 1 else ''})")
+
+                            for i, tx in historique.iterrows():
+                                with st.expander(
+                                    f"{tx['date_mutation'].strftime('%d/%m/%Y') if pd.notna(tx['date_mutation']) else 'N/A'} - "
+                                    f"{tx['valeur_fonciere']/1e6:.2f}M euros" if tx['valeur_fonciere'] >= 1e6 else
+                                    f"{tx['date_mutation'].strftime('%d/%m/%Y') if pd.notna(tx['date_mutation']) else 'N/A'} - "
+                                    f"{tx['valeur_fonciere']/1e3:.0f}k euros",
+                                    expanded=(i == 0)  # Premier element ouvert
+                                ):
+                                    # Type
+                                    st.write(f"**{tx.get('type_local', 'Bien immobilier')}**")
+
+                                    # Prix
+                                    prix = tx['valeur_fonciere']
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        prix_str = f"{prix/1e6:.2f}M" if prix >= 1e6 else f"{prix/1e3:.0f}k"
+                                        st.metric("Prix", f"{prix_str}")
+
+                                    # Surface et prix/m2
+                                    surface = tx.get('surface_reelle_bati')
+                                    with col2:
+                                        if pd.notna(surface) and surface > 0:
+                                            st.metric("Surface", f"{surface:.0f} m2")
+                                            prix_m2 = prix / surface
+                                            st.caption(f"soit {prix_m2:,.0f} euros/m2")
+
+                                    # Pieces
+                                    pieces = tx.get('nombre_pieces')
+                                    if pd.notna(pieces) and pieces > 0:
+                                        st.write(f"**Pieces:** {int(pieces)}")
+
+                                    # Adresse
+                                    adresse = tx.get('adresse')
+                                    if adresse:
+                                        st.write(f"**Adresse:** {adresse}")
+
+                                    # Nature
+                                    nature = tx.get('nature_mutation')
+                                    if nature:
+                                        st.write(f"**Type:** {nature}")
+                        else:
+                            st.info("Historique non disponible")
+                    else:
+                        st.info("Pas de vente enregistree sur cette parcelle")
+                else:
+                    st.info("Cliquez sur une parcelle coloree pour voir les details de la vente")
+
+                # Stats
+                st.markdown("---")
+                nb_avec_vente = df_geo["has_transaction"].sum() if "has_transaction" in df_geo.columns else 0
+                st.caption(f"{len(df_geo)} parcelles")
+                st.caption(f"{nb_avec_vente} avec ventes")
         else:
-            st.warning("Les geometries des parcelles ne sont pas disponibles dans les donnees actuelles.")
-            st.info("Pour avoir les contours des parcelles, relancez le scraping avec l'option --geo :")
-            st.code("python -m etl.scraper --geo", language="bash")
+            st.warning("Aucune parcelle trouvee. Chargez les donnees cadastrales avec:")
+            st.code("python -m etl.load_cadastre_dvf", language="bash")
 
     with tab_choropleth:
         fig_choro = carte_choropleth(df_filtre)
