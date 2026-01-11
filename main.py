@@ -334,17 +334,18 @@ def carte_parcelles(df):
         return None, None
 
     # Filtrer les lignes avec geometrie valide
-    df_geo = df[df["geom_json"].notna()].copy()
+    df_geo = df[df["geom_json"].notna()].copy().reset_index(drop=True)
 
     if df_geo.empty:
         return None, None
 
     # Limiter pour les performances
-    if len(df_geo) > 3000:
-        df_geo = df_geo.sample(n=3000, random_state=42)
+    if len(df_geo) > 2000:
+        df_geo = df_geo.sample(n=2000, random_state=42).reset_index(drop=True)
 
     # Construire le GeoJSON FeatureCollection
     features = []
+    valid_indices = []
     for idx, row in df_geo.iterrows():
         try:
             geom = json.loads(row["geom_json"])
@@ -359,10 +360,11 @@ def carte_parcelles(df):
 
             feature = {
                 "type": "Feature",
-                "id": int(row["id"]) if pd.notna(row.get("id")) else idx,
+                "id": idx,  # Use DataFrame index as ID
                 "geometry": geom,
                 "properties": {
-                    "id": int(row["id"]) if pd.notna(row.get("id")) else idx,
+                    "idx": idx,
+                    "db_id": int(row["id"]) if pd.notna(row.get("id")) else idx,
                     "prix": prix,
                     "prix_affiche": prix_affiche,
                     "prix_m2": prix_m2 if pd.notna(prix_m2) else 0,
@@ -375,21 +377,25 @@ def carte_parcelles(df):
                 }
             }
             features.append(feature)
+            valid_indices.append(idx)
         except (json.JSONDecodeError, TypeError, KeyError):
             continue
 
     if not features:
         return None, None
 
+    # Filter df_geo to only valid rows
+    df_geo = df_geo.loc[valid_indices].reset_index(drop=True)
+
     geojson = {
         "type": "FeatureCollection",
         "features": features
     }
 
-    # Calculer le centre et les bornes
+    # Calculer le centre
     all_lats = []
     all_lons = []
-    for f in features:
+    for f in features[:100]:  # Sample for center calculation
         coords = f["geometry"].get("coordinates", [])
         if f["geometry"]["type"] == "Polygon" and coords:
             for c in coords[0]:
@@ -408,21 +414,29 @@ def carte_parcelles(df):
     else:
         center_lat, center_lon = 48.8566, 2.3522
 
-    # Creer la figure avec choroplethmapbox
-    # Extraire les prix_m2 pour la coloration
+    # Extraire les valeurs pour la coloration
     prix_m2_values = [f["properties"]["prix_m2"] for f in features]
-    ids = [f["id"] for f in features]
+    ids = list(range(len(features)))  # Simple sequential IDs
 
+    # Calculer les bornes de couleur
+    valid_prices = [p for p in prix_m2_values if p > 0]
+    if valid_prices:
+        zmin = np.percentile(valid_prices, 5)
+        zmax = np.percentile(valid_prices, 95)
+    else:
+        zmin, zmax = 0, 15000
+
+    # Creer la figure
     fig = go.Figure(go.Choroplethmapbox(
         geojson=geojson,
         locations=ids,
         z=prix_m2_values,
         colorscale="RdYlGn_r",
-        zmin=min(p for p in prix_m2_values if p > 0) if any(p > 0 for p in prix_m2_values) else 0,
-        zmax=max(prix_m2_values) * 0.9 if prix_m2_values else 15000,
+        zmin=zmin,
+        zmax=zmax,
         marker_opacity=0.7,
-        marker_line_width=1,
-        marker_line_color="white",
+        marker_line_width=0.5,
+        marker_line_color="darkblue",
         colorbar=dict(
             title="Prix/m2",
             tickformat=",d",
@@ -433,7 +447,7 @@ def carte_parcelles(df):
             "Prix: %{customdata[1]}<br>"
             "Prix/m2: %{customdata[2]}<br>"
             "Surface: %{customdata[3]:.0f} m2<br>"
-            "Arr: %{customdata[4]}<br>"
+            "Arr: %{customdata[4]}e<br>"
             "Date: %{customdata[5]}<br>"
             "<extra></extra>"
         ),
@@ -449,11 +463,11 @@ def carte_parcelles(df):
 
     fig.update_layout(
         mapbox_style="open-street-map",
-        mapbox_zoom=12,
+        mapbox_zoom=13,
         mapbox_center={"lat": center_lat, "lon": center_lon},
         margin={"r": 0, "t": 40, "l": 0, "b": 0},
         height=650,
-        title="Carte des parcelles - Cliquez pour voir les details",
+        title="Carte des parcelles cadastrales - Survolez pour les details",
         uirevision="parcelles"
     )
 
@@ -783,62 +797,12 @@ def main():
         has_geom = "geom_json" in df_filtre.columns and df_filtre["geom_json"].notna().any()
 
         if has_geom:
-            col_carte, col_info = st.columns([3, 1])
-
-            with col_carte:
-                fig_parcelles, df_geo = carte_parcelles(df_filtre)
-                if fig_parcelles:
-                    # Afficher la carte avec selection
-                    selected = st.plotly_chart(
-                        fig_parcelles,
-                        use_container_width=True,
-                        config=map_config,
-                        on_select="rerun",
-                        key="parcelles_map"
-                    )
-
-            with col_info:
-                st.subheader("Details parcelle")
-
-                # Afficher les infos de la parcelle selectionnee
-                if selected and selected.selection and selected.selection.points:
-                    point = selected.selection.points[0]
-                    point_idx = point.get("pointIndex", point.get("point_index"))
-
-                    if point_idx is not None and df_geo is not None and point_idx < len(df_geo):
-                        row = df_geo.iloc[point_idx]
-
-                        st.markdown("---")
-                        st.markdown(f"**{row['type_local'] or 'Bien immobilier'}**")
-
-                        prix = row["valeur_fonciere"]
-                        st.metric("Prix de vente",
-                                  f"{prix/1e6:.2f}M euros" if prix >= 1e6 else f"{prix/1e3:.0f}k euros")
-
-                        if pd.notna(row["prix_m2"]):
-                            st.metric("Prix au m2", f"{row['prix_m2']:,.0f} euros")
-
-                        if pd.notna(row["surface_reelle_bati"]):
-                            st.metric("Surface", f"{row['surface_reelle_bati']:.0f} m2")
-
-                        st.markdown("---")
-                        st.write(f"**Arrondissement:** {row['arrondissement']}e")
-                        st.write(f"**Date:** {row['date_mutation'].strftime('%d/%m/%Y') if pd.notna(row['date_mutation']) else 'N/A'}")
-                        st.write(f"**Type:** {row['nature_mutation'] or 'Vente'}")
-
-                        if pd.notna(row.get("l_idpar")):
-                            import json
-                            try:
-                                parcelles = json.loads(row["l_idpar"])
-                                if parcelles:
-                                    st.write(f"**Parcelle:** {parcelles[0]}")
-                            except:
-                                pass
-                else:
-                    st.info("Cliquez sur une parcelle pour voir ses details")
-
-                st.markdown("---")
-                st.caption(f"{len(df_geo) if df_geo is not None else 0} parcelles affichees")
+            fig_parcelles, df_geo = carte_parcelles(df_filtre)
+            if fig_parcelles:
+                st.plotly_chart(fig_parcelles, use_container_width=True, config=map_config)
+                st.caption(f"{len(df_geo)} parcelles affichees - Survolez une parcelle pour voir les details")
+            else:
+                st.warning("Impossible de generer la carte des parcelles")
         else:
             st.warning("Les geometries des parcelles ne sont pas disponibles dans les donnees actuelles.")
             st.info("Pour avoir les contours des parcelles, relancez le scraping avec l'option --geo :")
