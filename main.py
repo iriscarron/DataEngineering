@@ -23,10 +23,10 @@ def verifier_donnees_existantes():
 
 
 def lancer_scraping():
-    """Lance le scraping des donnees DVF depuis l'API"""
-    print("Pas de donnees en base, lancement du scraping...")
-    from etl.scraper import run_scraper
-    run_scraper(annee_min="2024", annee_max="2024")
+    """Lance le scraping des donnees DVF depuis l'API (avec geometries des parcelles)"""
+    print("Pas de donnees en base, lancement du scraping avec geometries...")
+    from etl.scraper import run_scraper_geo
+    run_scraper_geo(annee_min="2024", annee_max="2024")
 
 
 # Si on lance avec "python main.py", on verifie les donnees et on lance streamlit
@@ -57,9 +57,10 @@ def charger_donnees():
         engine = create_engine(DATABASE_URL)
         query = """
             SELECT
-                date_mutation, valeur_fonciere, surface_reelle_bati,
+                id, id_mutation, date_mutation, valeur_fonciere, surface_reelle_bati,
                 prix_m2, nb_pieces, type_local, nature_mutation,
-                code_postal, arrondissement, latitude, longitude
+                code_postal, arrondissement, latitude, longitude,
+                geom_json, l_idpar
             FROM transactions
             WHERE valeur_fonciere IS NOT NULL
             ORDER BY date_mutation DESC
@@ -258,7 +259,7 @@ def graphique_nature_mutation(df):
 
 def carte_interactive(df):
     """
-    Carte interactive des transactions immobilieres
+    Carte interactive des transactions immobilieres (points)
     """
     if df.empty:
         return None
@@ -310,10 +311,153 @@ def carte_interactive(df):
     fig.update_layout(
         mapbox_style="open-street-map",
         margin={"r": 0, "t": 40, "l": 0, "b": 0},
-        height=500
+        height=600,
+        uirevision="constant"  # Preserve zoom/pan state on data updates
+    )
+
+    # Add zoom controls configuration
+    fig.update_mapboxes(
+        bearing=0,
+        pitch=0
     )
 
     return fig
+
+
+def carte_parcelles(df):
+    """
+    Carte interactive avec les polygones des parcelles cadastrales
+    """
+    import json
+
+    if df.empty:
+        return None, None
+
+    # Filtrer les lignes avec geometrie valide
+    df_geo = df[df["geom_json"].notna()].copy()
+
+    if df_geo.empty:
+        return None, None
+
+    # Limiter pour les performances
+    if len(df_geo) > 3000:
+        df_geo = df_geo.sample(n=3000, random_state=42)
+
+    # Construire le GeoJSON FeatureCollection
+    features = []
+    for idx, row in df_geo.iterrows():
+        try:
+            geom = json.loads(row["geom_json"])
+            if not geom or "coordinates" not in geom:
+                continue
+
+            # Formater le prix pour l'affichage
+            prix = row["valeur_fonciere"]
+            prix_affiche = f"{prix/1e6:.2f}M euros" if prix >= 1e6 else f"{prix/1e3:.0f}k euros"
+            prix_m2 = row["prix_m2"]
+            prix_m2_affiche = f"{prix_m2:,.0f} euros/m2" if pd.notna(prix_m2) else "N/A"
+
+            feature = {
+                "type": "Feature",
+                "id": int(row["id"]) if pd.notna(row.get("id")) else idx,
+                "geometry": geom,
+                "properties": {
+                    "id": int(row["id"]) if pd.notna(row.get("id")) else idx,
+                    "prix": prix,
+                    "prix_affiche": prix_affiche,
+                    "prix_m2": prix_m2 if pd.notna(prix_m2) else 0,
+                    "prix_m2_affiche": prix_m2_affiche,
+                    "surface": row["surface_reelle_bati"] if pd.notna(row["surface_reelle_bati"]) else 0,
+                    "type_local": row["type_local"] or "N/A",
+                    "arrondissement": row["arrondissement"] or "N/A",
+                    "date": row["date_mutation"].strftime("%d/%m/%Y") if pd.notna(row["date_mutation"]) else "N/A",
+                    "nature": row["nature_mutation"] or "Vente"
+                }
+            }
+            features.append(feature)
+        except (json.JSONDecodeError, TypeError, KeyError):
+            continue
+
+    if not features:
+        return None, None
+
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+
+    # Calculer le centre et les bornes
+    all_lats = []
+    all_lons = []
+    for f in features:
+        coords = f["geometry"].get("coordinates", [])
+        if f["geometry"]["type"] == "Polygon" and coords:
+            for c in coords[0]:
+                all_lons.append(c[0])
+                all_lats.append(c[1])
+        elif f["geometry"]["type"] == "MultiPolygon" and coords:
+            for poly in coords:
+                for ring in poly:
+                    for c in ring:
+                        all_lons.append(c[0])
+                        all_lats.append(c[1])
+
+    if all_lats and all_lons:
+        center_lat = sum(all_lats) / len(all_lats)
+        center_lon = sum(all_lons) / len(all_lons)
+    else:
+        center_lat, center_lon = 48.8566, 2.3522
+
+    # Creer la figure avec choroplethmapbox
+    # Extraire les prix_m2 pour la coloration
+    prix_m2_values = [f["properties"]["prix_m2"] for f in features]
+    ids = [f["id"] for f in features]
+
+    fig = go.Figure(go.Choroplethmapbox(
+        geojson=geojson,
+        locations=ids,
+        z=prix_m2_values,
+        colorscale="RdYlGn_r",
+        zmin=min(p for p in prix_m2_values if p > 0) if any(p > 0 for p in prix_m2_values) else 0,
+        zmax=max(prix_m2_values) * 0.9 if prix_m2_values else 15000,
+        marker_opacity=0.7,
+        marker_line_width=1,
+        marker_line_color="white",
+        colorbar=dict(
+            title="Prix/m2",
+            tickformat=",d",
+            ticksuffix=" euros"
+        ),
+        hovertemplate=(
+            "<b>%{customdata[0]}</b><br>"
+            "Prix: %{customdata[1]}<br>"
+            "Prix/m2: %{customdata[2]}<br>"
+            "Surface: %{customdata[3]:.0f} m2<br>"
+            "Arr: %{customdata[4]}<br>"
+            "Date: %{customdata[5]}<br>"
+            "<extra></extra>"
+        ),
+        customdata=[[
+            f["properties"]["type_local"],
+            f["properties"]["prix_affiche"],
+            f["properties"]["prix_m2_affiche"],
+            f["properties"]["surface"],
+            f["properties"]["arrondissement"],
+            f["properties"]["date"]
+        ] for f in features]
+    ))
+
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        mapbox_zoom=12,
+        mapbox_center={"lat": center_lat, "lon": center_lon},
+        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        height=650,
+        title="Carte des parcelles - Cliquez pour voir les details",
+        uirevision="parcelles"
+    )
+
+    return fig, df_geo
 
 
 @st.cache_data(show_spinner=False)
@@ -389,11 +533,18 @@ def carte_choropleth(df):
 
     fig.update_layout(
         margin={"r": 0, "t": 40, "l": 0, "b": 0},
-        height=500,
+        height=600,
+        uirevision="constant",  # Preserve zoom/pan state on data updates
         coloraxis_colorbar=dict(
             title="Prix/m2",
             tickformat=",d"
         )
+    )
+
+    # Add zoom controls configuration
+    fig.update_mapboxes(
+        bearing=0,
+        pitch=0
     )
 
     return fig
@@ -613,19 +764,97 @@ def main():
     st.divider()
 
     # Cartes avec onglets
-    tab_choropleth, tab_points = st.tabs(["Carte par arrondissement", "Carte des transactions"])
+    tab_parcelles, tab_choropleth, tab_points = st.tabs([
+        "Carte des parcelles",
+        "Carte par arrondissement",
+        "Carte des transactions (points)"
+    ])
+
+    # Configuration pour un meilleur zoom/scroll sur les cartes
+    map_config = {
+        "scrollZoom": True,
+        "displayModeBar": True,
+        "modeBarButtonsToAdd": ["zoomIn2d", "zoomOut2d", "resetScale2d"],
+        "displaylogo": False
+    }
+
+    with tab_parcelles:
+        # Verifier si des geometries sont disponibles
+        has_geom = "geom_json" in df_filtre.columns and df_filtre["geom_json"].notna().any()
+
+        if has_geom:
+            col_carte, col_info = st.columns([3, 1])
+
+            with col_carte:
+                fig_parcelles, df_geo = carte_parcelles(df_filtre)
+                if fig_parcelles:
+                    # Afficher la carte avec selection
+                    selected = st.plotly_chart(
+                        fig_parcelles,
+                        use_container_width=True,
+                        config=map_config,
+                        on_select="rerun",
+                        key="parcelles_map"
+                    )
+
+            with col_info:
+                st.subheader("Details parcelle")
+
+                # Afficher les infos de la parcelle selectionnee
+                if selected and selected.selection and selected.selection.points:
+                    point = selected.selection.points[0]
+                    point_idx = point.get("pointIndex", point.get("point_index"))
+
+                    if point_idx is not None and df_geo is not None and point_idx < len(df_geo):
+                        row = df_geo.iloc[point_idx]
+
+                        st.markdown("---")
+                        st.markdown(f"**{row['type_local'] or 'Bien immobilier'}**")
+
+                        prix = row["valeur_fonciere"]
+                        st.metric("Prix de vente",
+                                  f"{prix/1e6:.2f}M euros" if prix >= 1e6 else f"{prix/1e3:.0f}k euros")
+
+                        if pd.notna(row["prix_m2"]):
+                            st.metric("Prix au m2", f"{row['prix_m2']:,.0f} euros")
+
+                        if pd.notna(row["surface_reelle_bati"]):
+                            st.metric("Surface", f"{row['surface_reelle_bati']:.0f} m2")
+
+                        st.markdown("---")
+                        st.write(f"**Arrondissement:** {row['arrondissement']}e")
+                        st.write(f"**Date:** {row['date_mutation'].strftime('%d/%m/%Y') if pd.notna(row['date_mutation']) else 'N/A'}")
+                        st.write(f"**Type:** {row['nature_mutation'] or 'Vente'}")
+
+                        if pd.notna(row.get("l_idpar")):
+                            import json
+                            try:
+                                parcelles = json.loads(row["l_idpar"])
+                                if parcelles:
+                                    st.write(f"**Parcelle:** {parcelles[0]}")
+                            except:
+                                pass
+                else:
+                    st.info("Cliquez sur une parcelle pour voir ses details")
+
+                st.markdown("---")
+                st.caption(f"{len(df_geo) if df_geo is not None else 0} parcelles affichees")
+        else:
+            st.warning("Les geometries des parcelles ne sont pas disponibles dans les donnees actuelles.")
+            st.info("Pour avoir les contours des parcelles, relancez le scraping avec l'option --geo :")
+            st.code("python -m etl.scraper --geo", language="bash")
 
     with tab_choropleth:
         fig_choro = carte_choropleth(df_filtre)
         if fig_choro:
-            st.plotly_chart(fig_choro, use_container_width=True)
+            st.plotly_chart(fig_choro, use_container_width=True, config=map_config)
         else:
             st.info("Impossible de charger la carte des arrondissements")
 
     with tab_points:
         fig_carte = carte_interactive(df_filtre)
         if fig_carte:
-            st.plotly_chart(fig_carte, use_container_width=True)
+            st.plotly_chart(fig_carte, use_container_width=True, config=map_config)
         else:
             st.info("Pas de coordonnees GPS disponibles pour afficher la carte")
 

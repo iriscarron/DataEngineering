@@ -241,3 +241,61 @@ def elasticsearch_disponible():
         return es.ping() and compter_documents() > 0
     except Exception:
         return False
+
+
+def indexer_depuis_postgres():
+    """
+    Charge les donnees depuis PostgreSQL et les indexe dans Elasticsearch
+    """
+    import pandas as pd
+    from sqlalchemy import create_engine
+
+    DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dvf:dvf@localhost:5432/dvf")
+
+    try:
+        # Attendre que Elasticsearch soit pret
+        if not attendre_elasticsearch(max_tentatives=10, delai=2):
+            print("Elasticsearch non disponible")
+            return False
+
+        # Creer l'index
+        creer_index()
+
+        # Charger les donnees depuis PostgreSQL
+        engine = create_engine(DATABASE_URL)
+        query = """
+            SELECT
+                date_mutation, valeur_fonciere, surface_reelle_bati,
+                prix_m2, type_local, code_postal, arrondissement,
+                latitude, longitude
+            FROM transactions
+            WHERE valeur_fonciere IS NOT NULL
+        """
+        df = pd.read_sql(query, engine)
+
+        if df.empty:
+            print("Pas de donnees dans PostgreSQL")
+            return False
+
+        # Ajouter un id_mutation si absent
+        df["id_mutation"] = range(1, len(df) + 1)
+
+        # Ajouter des colonnes manquantes
+        if "nb_pieces" not in df.columns:
+            df["nb_pieces"] = None
+        if "nature_mutation" not in df.columns:
+            df["nature_mutation"] = "Vente"
+
+        # Indexer
+        nb_indexes = indexer_transactions(df)
+        print(f"Indexation terminee: {nb_indexes} documents")
+        return nb_indexes > 0
+
+    except Exception as e:
+        print(f"Erreur indexation: {e}")
+        return False
+
+
+if __name__ == "__main__":
+    print("Indexation des donnees DVF dans Elasticsearch...")
+    indexer_depuis_postgres()
