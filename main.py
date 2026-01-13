@@ -39,6 +39,7 @@ if __name__ == "__main__" and "streamlit" not in sys.modules:
     sys.exit(0)
 
 # A partir d'ici, c'est le code Streamlit
+import re
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -535,13 +536,7 @@ def carte_parcelles(df, show_no_transaction=True):
             marker_line_width=0.8,
             marker_line_color="darkblue",
             showscale=False,
-            hovertemplate=(
-                "<b>Parcelle cadastrale</b><br>"
-                "%{customdata[0]}<br>"
-                "%{customdata[1]}e arrondissement<br>"
-                "Aucune vente (2022-2024)"
-                "<extra></extra>"
-            ),
+            hovertemplate="<extra></extra>",
             customdata=[[
                 f["properties"]["id_parcelle"],
                 f["properties"]["arrondissement"]
@@ -602,14 +597,7 @@ def carte_parcelles(df, show_no_transaction=True):
                 ticksuffix=" euros",
                 len=0.8
             ),
-            hovertemplate=(
-                "<b>%{customdata[2]}</b><br>"
-                "%{customdata[0]} | %{customdata[3]:.0f} m2<br>"
-                "Prix: %{customdata[1]}<br>"
-                "%{customdata[4]}e arr. | %{customdata[5]}<br>"
-                "%{customdata[7]}"
-                "<extra></extra>"
-            ),
+            hovertemplate="<extra></extra>",
             customdata=customdata_tx,
             name="Avec vente"
         ))
@@ -944,10 +932,9 @@ def main():
     st.divider()
 
     # Cartes avec onglets
-    tab_parcelles, tab_choropleth, tab_points = st.tabs([
+    tab_parcelles, tab_choropleth = st.tabs([
         "Carte des parcelles",
-        "Carte par arrondissement",
-        "Carte des transactions (points)"
+        "Carte par arrondissement"
     ])
 
     # Configuration pour un meilleur zoom/scroll sur les cartes
@@ -987,8 +974,9 @@ def main():
 
         with col_toggle:
             show_all_parcels = st.toggle(
-                "Fond cadastral",
-                value=False
+                "Toutes les parcelles",
+                value=False,
+                help="Afficher aussi les parcelles sans vente"
             )
 
         arr_list = [arr_parcelles]
@@ -1040,7 +1028,8 @@ def main():
                     id_parcelle = parcelle_found.get('id_parcelle', '')
                     historique = charger_historique_parcelle(id_parcelle)
 
-                    st.markdown(f"**{len(historique)} mutations**")
+                    st.markdown(f"**Parcelle {id_parcelle}**")
+                    st.caption(f"{len(historique)} mutations")
 
                     # BDNB Building info
                     annee = parcelle_found.get('annee_construction')
@@ -1110,9 +1099,12 @@ def main():
                             surface = tx.get('surface_reelle_bati')
                             type_local = tx.get('type_local', '')
                             adresse = tx.get('adresse', '')
-                            id_mut = tx.get('id_mutation', '')
                             date_tx = tx['date_mutation']
                             pieces = tx.get('nombre_pieces')
+
+                            # Fix address format (remove .0 from street numbers)
+                            if adresse:
+                                adresse = re.sub(r'(\d+)\.0\b', r'\1', str(adresse))
 
                             # Format prix
                             if prix >= 1e6:
@@ -1126,8 +1118,6 @@ def main():
 
                             if adresse:
                                 st.caption(adresse)
-                            if id_mut:
-                                st.caption(f"#{id_mut}")
                             if pd.notna(date_tx):
                                 st.caption(date_tx.strftime('%d %B %Y'))
 
@@ -1161,13 +1151,6 @@ def main():
             st.plotly_chart(fig_choro, use_container_width=True, config=map_config)
         else:
             st.info("Impossible de charger la carte des arrondissements")
-
-    with tab_points:
-        fig_carte = carte_interactive(df_filtre)
-        if fig_carte:
-            st.plotly_chart(fig_carte, use_container_width=True, config=map_config)
-        else:
-            st.info("Pas de coordonnees GPS disponibles pour afficher la carte")
 
     st.divider()
 

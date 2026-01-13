@@ -149,11 +149,9 @@ def rechercher_transactions(query, filtres=None, taille=100):
     """
     es = get_es_client()
 
-    # Construction de la requete
     must_clauses = []
     filter_clauses = []
 
-    # Recherche textuelle
     if query and query.strip():
         must_clauses.append({
             "multi_match": {
@@ -163,7 +161,6 @@ def rechercher_transactions(query, filtres=None, taille=100):
             }
         })
 
-    # Filtres optionnels
     if filtres:
         if filtres.get("arrondissement"):
             filter_clauses.append({"term": {"arrondissement": filtres["arrondissement"]}})
@@ -195,7 +192,6 @@ def rechercher_transactions(query, filtres=None, taille=100):
                 range_query["range"]["date_mutation"]["lte"] = filtres["date_max"]
             filter_clauses.append(range_query)
 
-    # Requete finale
     if not must_clauses and not filter_clauses:
         body = {"query": {"match_all": {}}, "size": taille}
     else:
@@ -253,15 +249,12 @@ def indexer_depuis_postgres():
     DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dvf:dvf@localhost:5432/dvf")
 
     try:
-        # Attendre que Elasticsearch soit pret
         if not attendre_elasticsearch(max_tentatives=10, delai=2):
             print("Elasticsearch non disponible")
             return False
 
-        # Creer l'index
         creer_index()
 
-        # Charger les donnees depuis PostgreSQL
         engine = create_engine(DATABASE_URL)
         query = """
             SELECT
@@ -277,16 +270,13 @@ def indexer_depuis_postgres():
             print("Pas de donnees dans PostgreSQL")
             return False
 
-        # Ajouter un id_mutation si absent
         df["id_mutation"] = range(1, len(df) + 1)
 
-        # Ajouter des colonnes manquantes
         if "nb_pieces" not in df.columns:
             df["nb_pieces"] = None
         if "nature_mutation" not in df.columns:
             df["nature_mutation"] = "Vente"
 
-        # Indexer
         nb_indexes = indexer_transactions(df)
         print(f"Indexation terminee: {nb_indexes} documents")
         return nb_indexes > 0
