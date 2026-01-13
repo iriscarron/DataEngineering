@@ -359,7 +359,8 @@ def charger_parcelles(arrondissements=None):
             query = f"""
                 SELECT id, id_parcelle, geom_json, arrondissement, has_transaction,
                        valeur_fonciere, prix_m2, type_local, surface_reelle_bati,
-                       date_mutation, nature_mutation, adresse, nb_transactions
+                       date_mutation, nature_mutation, adresse, nb_transactions,
+                       annee_construction, classe_dpe, nb_logements, hauteur_batiment, materiau_mur
                 FROM parcelles
                 WHERE arrondissement IN ({arr_list})
             """
@@ -367,7 +368,8 @@ def charger_parcelles(arrondissements=None):
             query = """
                 SELECT id, id_parcelle, geom_json, arrondissement, has_transaction,
                        valeur_fonciere, prix_m2, type_local, surface_reelle_bati,
-                       date_mutation, nature_mutation, adresse, nb_transactions
+                       date_mutation, nature_mutation, adresse, nb_transactions,
+                       annee_construction, classe_dpe, nb_logements, hauteur_batiment, materiau_mur
                 FROM parcelles
             """
 
@@ -422,6 +424,13 @@ def carte_parcelles(df, show_no_transaction=True):
 
             has_tx = row.get("has_transaction", False)
 
+            # BDNB data (shared for both cases)
+            annee_constr = row.get("annee_construction")
+            classe_dpe = row.get("classe_dpe")
+            nb_logements = row.get("nb_logements")
+            hauteur = row.get("hauteur_batiment")
+            materiau = row.get("materiau_mur")
+
             if has_tx and pd.notna(row.get("valeur_fonciere")):
                 # Parcelle avec transaction
                 prix = row["valeur_fonciere"]
@@ -460,7 +469,12 @@ def carte_parcelles(df, show_no_transaction=True):
                     "arrondissement": row.get("arrondissement") or "N/A",
                     "date": date_str,
                     "adresse": row.get("adresse") or "",
-                    "nb_transactions": nb_transactions
+                    "nb_transactions": nb_transactions,
+                    "annee_construction": int(annee_constr) if pd.notna(annee_constr) else None,
+                    "classe_dpe": classe_dpe if pd.notna(classe_dpe) else None,
+                    "nb_logements": int(nb_logements) if pd.notna(nb_logements) else None,
+                    "hauteur": float(hauteur) if pd.notna(hauteur) else None,
+                    "materiau_mur": materiau if pd.notna(materiau) else None
                 }
             }
             features.append(feature)
@@ -549,6 +563,29 @@ def carte_parcelles(df, show_no_transaction=True):
         else:
             zmin, zmax = 3000, 15000
 
+        # Build customdata with BDNB info
+        customdata_tx = []
+        for f in features_with_tx:
+            props = f["properties"]
+            # Build BDNB info string
+            bdnb_parts = []
+            if props.get("annee_construction"):
+                bdnb_parts.append(f"Constr. {props['annee_construction']}")
+            if props.get("classe_dpe"):
+                bdnb_parts.append(f"DPE {props['classe_dpe']}")
+            bdnb_info = " | ".join(bdnb_parts) if bdnb_parts else ""
+
+            customdata_tx.append([
+                props["type_local"],
+                props["prix_affiche"],
+                props["prix_m2_affiche"],
+                props["surface"],
+                props["arrondissement"],
+                props["date"],
+                props["id_parcelle"],
+                bdnb_info
+            ])
+
         fig.add_trace(go.Choroplethmapbox(
             geojson=geojson_tx,
             locations=ids_tx,
@@ -569,18 +606,11 @@ def carte_parcelles(df, show_no_transaction=True):
                 "<b>%{customdata[2]}</b><br>"
                 "%{customdata[0]} | %{customdata[3]:.0f} m2<br>"
                 "Prix: %{customdata[1]}<br>"
-                "%{customdata[4]}e arr. | %{customdata[5]}"
+                "%{customdata[4]}e arr. | %{customdata[5]}<br>"
+                "%{customdata[7]}"
                 "<extra></extra>"
             ),
-            customdata=[[
-                f["properties"]["type_local"],
-                f["properties"]["prix_affiche"],
-                f["properties"]["prix_m2_affiche"],
-                f["properties"]["surface"],
-                f["properties"]["arrondissement"],
-                f["properties"]["date"],
-                f["properties"]["id_parcelle"]
-            ] for f in features_with_tx],
+            customdata=customdata_tx,
             name="Avec vente"
         ))
 
@@ -1011,6 +1041,38 @@ def main():
                     historique = charger_historique_parcelle(id_parcelle)
 
                     st.markdown(f"**{len(historique)} mutations**")
+
+                    # BDNB Building info
+                    annee = parcelle_found.get('annee_construction')
+                    dpe = parcelle_found.get('classe_dpe')
+                    nb_log = parcelle_found.get('nb_logements')
+                    hauteur = parcelle_found.get('hauteur_batiment')
+                    materiau = parcelle_found.get('materiau_mur')
+
+                    if pd.notna(annee) or pd.notna(dpe) or pd.notna(nb_log):
+                        st.markdown("**Batiment (BDNB)**")
+                        bdnb_cols = st.columns(3)
+                        with bdnb_cols[0]:
+                            if pd.notna(annee):
+                                st.metric("Construction", int(annee))
+                        with bdnb_cols[1]:
+                            if pd.notna(dpe):
+                                # Color code DPE
+                                dpe_colors = {'A': '#319834', 'B': '#33cc33', 'C': '#ccff33',
+                                              'D': '#ffff00', 'E': '#ffcc00', 'F': '#ff6600', 'G': '#ff0000'}
+                                color = dpe_colors.get(str(dpe).upper(), '#888888')
+                                st.markdown(f"DPE <span style='background:{color};padding:2px 8px;border-radius:3px;font-weight:bold'>{dpe}</span>", unsafe_allow_html=True)
+                        with bdnb_cols[2]:
+                            if pd.notna(nb_log):
+                                st.metric("Logements", int(nb_log))
+                        if pd.notna(hauteur) or pd.notna(materiau):
+                            extra = []
+                            if pd.notna(hauteur):
+                                extra.append(f"Hauteur: {hauteur:.1f}m")
+                            if pd.notna(materiau):
+                                extra.append(f"Mur: {materiau[:20]}")
+                            st.caption(" | ".join(extra))
+                        st.markdown("---")
 
                     if not historique.empty:
                         # Calculer prix/m2 pour le graphique
