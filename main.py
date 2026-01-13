@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Dashboard DVF Paris
 Application Streamlit pour visualiser les transactions immobilieres a Paris
@@ -329,7 +330,7 @@ def charger_historique_parcelle(id_parcelle):
     Charge l'historique des transactions pour une parcelle
     """
     try:
-        engine = create_engine(DATABASE_URL)
+        engine = create_engine(DATABASE_URL + "?client_encoding=utf8")
         query = f"""
             SELECT id_mutation, date_mutation, nature_mutation, valeur_fonciere,
                    type_local, surface_reelle_bati, nombre_pieces, adresse
@@ -340,8 +341,21 @@ def charger_historique_parcelle(id_parcelle):
         df = pd.read_sql(query, engine)
         if "date_mutation" in df.columns:
             df["date_mutation"] = pd.to_datetime(df["date_mutation"])
+        # Fix encoding issues (data may be stored as latin-1 but read as utf-8)
+        def fix_encoding(text):
+            if not isinstance(text, str):
+                return text
+            try:
+                # Try to fix mojibake (UTF-8 interpreted as Latin-1)
+                return text.encode('latin-1').decode('utf-8')
+            except (UnicodeDecodeError, UnicodeEncodeError):
+                return text
+
+        for col in ['type_local', 'nature_mutation', 'adresse']:
+            if col in df.columns:
+                df[col] = df[col].apply(fix_encoding)
         return df
-    except Exception:
+    except Exception as e:
         return pd.DataFrame()
 
 
@@ -430,6 +444,7 @@ def carte_parcelles(df, show_no_transaction=True):
                 surface = row["surface_reelle_bati"] if pd.notna(row["surface_reelle_bati"]) else 0
                 type_local = row["type_local"] or "Bien immobilier"
                 date_str = row["date_mutation"].strftime("%d/%m/%Y") if pd.notna(row["date_mutation"]) else "N/A"
+                nb_transactions = row.get("nb_transactions", 1) or 1
             else:
                 # Parcelle sans transaction
                 prix = 0
@@ -439,6 +454,7 @@ def carte_parcelles(df, show_no_transaction=True):
                 surface = 0
                 type_local = "Parcelle cadastrale"
                 date_str = "N/A"
+                nb_transactions = 0
 
             feature = {
                 "type": "Feature",
@@ -456,7 +472,8 @@ def carte_parcelles(df, show_no_transaction=True):
                     "type_local": type_local,
                     "arrondissement": row.get("arrondissement") or "N/A",
                     "date": date_str,
-                    "adresse": row.get("adresse") or ""
+                    "adresse": row.get("adresse") or "",
+                    "nb_transactions": nb_transactions
                 }
             }
             features.append(feature)
@@ -518,9 +535,10 @@ def carte_parcelles(df, show_no_transaction=True):
             marker_line_color="darkblue",
             showscale=False,
             hovertemplate=(
-                "<b>Parcelle %{customdata[0]}</b><br>"
-                "Arr: %{customdata[1]}e<br>"
-                "Pas de vente enregistree<br>"
+                "<b>Parcelle cadastrale</b><br>"
+                "%{customdata[0]}<br>"
+                "%{customdata[1]}e arrondissement<br>"
+                "Aucune vente (2022-2024)"
                 "<extra></extra>"
             ),
             customdata=[[
@@ -562,12 +580,11 @@ def carte_parcelles(df, show_no_transaction=True):
             ),
             hovertemplate=(
                 "<b>%{customdata[0]}</b><br>"
-                "Parcelle: %{customdata[6]}<br>"
                 "Prix: %{customdata[1]}<br>"
                 "Prix/m2: %{customdata[2]}<br>"
                 "Surface: %{customdata[3]:.0f} m2<br>"
-                "Arr: %{customdata[4]}e<br>"
-                "Date: %{customdata[5]}<br>"
+                "%{customdata[4]}e arr.<br>"
+                "Date: %{customdata[5]}"
                 "<extra></extra>"
             ),
             customdata=[[
@@ -827,59 +844,65 @@ def main():
         st.info("Ou utilisez docker-compose up pour lancer l'application complete")
         return
 
-    with st.sidebar:     # Sidebar filtres
-        st.header("Filtres")
+    # Filtres en ligne (expandable)
+    with st.expander("Filtres", expanded=False):
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
 
-        min_date = df["date_mutation"].min().date() #filtre date
+        min_date = df["date_mutation"].min().date()
         max_date = df["date_mutation"].max().date()
 
-        date_range = st.date_input(
-            "Periode",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date
-        )
-
-        arrondissements = sorted(df["arrondissement"].dropna().unique(), key=lambda x: int(x) if x.isdigit() else 0)
-        arr_selected = st.multiselect(
-            "Arrondissements", # Filtre arrondissements
-            arrondissements,
-            default=arrondissements
-        )
-
-        types = sorted(df["type_local"].dropna().unique())        # Filtre type de bien
-        types_selected = st.multiselect(
-            "Type de bien",
-            types,
-            default=types
-        )
-
-        if "nature_mutation" in df.columns:        # Filtre nature mutation (type de vente)
-            natures = sorted(df["nature_mutation"].dropna().unique())
-            natures_selected = st.multiselect(
-                "Type de vente",
-                natures,
-                default=natures
+        with col_f1:
+            date_range = st.date_input(
+                "Periode",
+                value=(min_date, max_date),
+                min_value=min_date,
+                max_value=max_date
             )
-        else:
-            natures_selected = []
 
-        st.subheader("Filtres prix")         # Filtre prix
-        prix_min, prix_max = st.slider(
-            "Plage de prix (euros)",
-            min_value=0,
-            max_value=int(df["valeur_fonciere"].max()),
-            value=(0, int(df["valeur_fonciere"].quantile(0.99)))
-        )
+        with col_f2:
+            arrondissements = sorted(df["arrondissement"].dropna().unique(), key=lambda x: int(x) if x.isdigit() else 0)
+            arr_selected = st.multiselect(
+                "Arrondissements",
+                arrondissements,
+                default=arrondissements
+            )
 
-        seuil_percentile = st.slider(         # Seuil grosses ventes
-            "Seuil grosses ventes (percentile)",
-            min_value=80,
-            max_value=99,
-            value=95
-        )
+        with col_f3:
+            types = sorted(df["type_local"].dropna().unique())
+            types_selected = st.multiselect(
+                "Type de bien",
+                types,
+                default=types
+            )
 
-    if len(date_range) == 2:     # Appliquer les filtres
+        with col_f4:
+            if "nature_mutation" in df.columns:
+                natures = sorted(df["nature_mutation"].dropna().unique())
+                natures_selected = st.multiselect(
+                    "Type de vente",
+                    natures,
+                    default=natures
+                )
+            else:
+                natures_selected = []
+
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            prix_min, prix_max = st.slider(
+                "Plage de prix (euros)",
+                min_value=0,
+                max_value=int(df["valeur_fonciere"].max()),
+                value=(0, int(df["valeur_fonciere"].quantile(0.99)))
+            )
+        with col_p2:
+            seuil_percentile = st.slider(
+                "Seuil grosses ventes (percentile)",
+                min_value=80,
+                max_value=99,
+                value=95
+            )
+
+    if len(date_range) == 2:
         mask = (
             (df["date_mutation"].dt.date >= date_range[0]) &
             (df["date_mutation"].dt.date <= date_range[1]) &
@@ -921,149 +944,172 @@ def main():
     }
 
     with tab_parcelles:
-        st.subheader("Carte cadastrale avec ventes DVF")
+        # Mapping des types de biens pour affichage (gere les variantes d'encodage)
+        def get_type_label(t):
+            if not t:
+                return "Autre"
+            t_lower = t.lower()
+            if "appartement" in t_lower:
+                return "Appart."
+            if "maison" in t_lower:
+                return "Maison"
+            if "pendant" in t_lower or "parking" in t_lower or "cave" in t_lower or "box" in t_lower:
+                return "Parking/Cave"
+            if "local" in t_lower or "commercial" in t_lower or "industriel" in t_lower:
+                return "Local comm."
+            return t[:15] if len(t) > 15 else t
 
         # Controles en ligne
-        col_arr, col_toggle, col_search = st.columns([2, 2, 2])
+        col_arr, col_toggle = st.columns([3, 1])
 
         with col_arr:
             arr_parcelles = st.selectbox(
                 "Arrondissement",
                 options=[str(i) for i in range(1, 21)],
-                index=3,  # 4eme par defaut
+                index=3,
                 key="arr_parcelles"
             )
 
         with col_toggle:
             show_all_parcels = st.toggle(
-                "Afficher toutes les parcelles",
-                value=True,
-                help="Affiche les parcelles sans vente en fond bleu"
-            )
-
-        with col_search:
-            search_parcelle = st.text_input(
-                "Rechercher parcelle",
-                placeholder="Ex: 75104000AF0061",
-                key="search_parcelle"
+                "Fond cadastral",
+                value=False
             )
 
         arr_list = [arr_parcelles]
 
         # Charger les parcelles
         df_parcelles = charger_parcelles(tuple(arr_list))
+        df_parcelles_filtered = df_parcelles
 
-        if not df_parcelles.empty:
-            # Layout: carte + panneau details
-            col_map, col_details = st.columns([3, 1])
+        if not df_parcelles_filtered.empty:
+            # Layout: panneau details a GAUCHE, carte a DROITE
+            col_details, col_map = st.columns([1, 3])
 
             with col_map:
-                fig_parcelles, df_geo = carte_parcelles(df_parcelles, show_no_transaction=show_all_parcels)
+                fig_parcelles, df_geo = carte_parcelles(df_parcelles_filtered, show_no_transaction=show_all_parcels)
 
                 if fig_parcelles:
-                    # Afficher la carte avec selection
                     selected = st.plotly_chart(
                         fig_parcelles,
                         use_container_width=True,
                         config=map_config,
                         on_select="rerun",
+                        selection_mode="points",
                         key="map_parcelles"
                     )
 
             with col_details:
-                st.markdown("### Details")
-
-                # Gerer la recherche de parcelle
                 parcelle_found = None
-                if search_parcelle:
-                    match = df_geo[df_geo["id_parcelle"].str.contains(search_parcelle.upper(), na=False)]
-                    if not match.empty:
-                        parcelle_found = match.iloc[0]
-                        st.success(f"Parcelle trouvee!")
-                    else:
-                        st.warning("Parcelle non trouvee")
+                id_parcelle_selected = None
 
-                # Gerer le clic sur la carte
-                elif selected and hasattr(selected, 'selection') and selected.selection:
+                # Selection sur carte
+                if selected and hasattr(selected, 'selection') and selected.selection:
                     points = selected.selection.get('points', [])
                     if points:
                         point = points[0]
-                        # Recuperer l'index de la parcelle
-                        point_idx = point.get('pointIndex', point.get('point_index'))
-                        if point_idx is not None and point_idx < len(df_geo):
-                            parcelle_found = df_geo.iloc[point_idx]
+                        customdata = point.get('customdata', [])
+                        if customdata:
+                            # id_parcelle: position 6 (avec transaction) ou 0 (sans)
+                            if len(customdata) >= 7:
+                                id_parcelle_selected = customdata[6]
+                            elif len(customdata) >= 1:
+                                id_parcelle_selected = customdata[0]
 
-                # Afficher les details de la parcelle
+                        if id_parcelle_selected:
+                            match = df_geo[df_geo['id_parcelle'] == id_parcelle_selected]
+                            if not match.empty:
+                                parcelle_found = match.iloc[0]
+
                 if parcelle_found is not None:
-                    row = parcelle_found
-                    id_parcelle = row.get('id_parcelle', '')
+                    id_parcelle = parcelle_found.get('id_parcelle', '')
 
-                    st.markdown(f"**Parcelle:**")
-                    st.code(id_parcelle)
+                    st.markdown(f"**Parcelle {id_parcelle}**")
 
-                    if row.get('has_transaction'):
-                        # Charger l'historique complet
-                        historique = charger_historique_parcelle(id_parcelle)
+                    historique = charger_historique_parcelle(id_parcelle)
 
-                        if not historique.empty:
-                            st.markdown("---")
-                            st.markdown(f"#### Historique ({len(historique)} vente{'s' if len(historique) > 1 else ''})")
+                    if not historique.empty:
+                        # Grouper par type de bien
+                        types_uniques = historique['type_local'].dropna().unique()
 
-                            for i, tx in historique.iterrows():
-                                with st.expander(
-                                    f"{tx['date_mutation'].strftime('%d/%m/%Y') if pd.notna(tx['date_mutation']) else 'N/A'} - "
-                                    f"{tx['valeur_fonciere']/1e6:.2f}M euros" if tx['valeur_fonciere'] >= 1e6 else
-                                    f"{tx['date_mutation'].strftime('%d/%m/%Y') if pd.notna(tx['date_mutation']) else 'N/A'} - "
-                                    f"{tx['valeur_fonciere']/1e3:.0f}k euros",
-                                    expanded=(i == 0)  # Premier element ouvert
-                                ):
-                                    # Type
-                                    st.write(f"**{tx.get('type_local', 'Bien immobilier')}**")
+                        # Graphique evolution prix par type
+                        if len(historique) > 1:
+                            hist_plot = historique[historique['valeur_fonciere'] > 0].copy()
+                            hist_plot['annee'] = hist_plot['date_mutation'].dt.year
 
-                                    # Prix
-                                    prix = tx['valeur_fonciere']
-                                    col1, col2 = st.columns(2)
-                                    with col1:
-                                        prix_str = f"{prix/1e6:.2f}M" if prix >= 1e6 else f"{prix/1e3:.0f}k"
-                                        st.metric("Prix", f"{prix_str}")
+                            if not hist_plot.empty:
+                                fig_prix = go.Figure()
 
-                                    # Surface et prix/m2
-                                    surface = tx.get('surface_reelle_bati')
-                                    with col2:
-                                        if pd.notna(surface) and surface > 0:
-                                            st.metric("Surface", f"{surface:.0f} m2")
-                                            prix_m2 = prix / surface
-                                            st.caption(f"soit {prix_m2:,.0f} euros/m2")
+                                colors = {'Appartement': '#1f77b4', 'Maison': '#2ca02c',
+                                         'Local': '#ff7f0e', 'Parking': '#9467bd'}
 
-                                    # Pieces
-                                    pieces = tx.get('nombre_pieces')
-                                    if pd.notna(pieces) and pieces > 0:
-                                        st.write(f"**Pieces:** {int(pieces)}")
+                                for type_bien in types_uniques:
+                                    df_type = hist_plot[hist_plot['type_local'] == type_bien]
+                                    if not df_type.empty:
+                                        label = get_type_label(type_bien)
+                                        color = colors.get(label.split('/')[0].split('.')[0], '#888888')
 
-                                    # Adresse
-                                    adresse = tx.get('adresse')
-                                    if adresse:
-                                        st.write(f"**Adresse:** {adresse}")
+                                        fig_prix.add_trace(go.Scatter(
+                                            x=df_type['date_mutation'],
+                                            y=df_type['valeur_fonciere'],
+                                            mode='markers+lines',
+                                            name=label,
+                                            marker=dict(size=8),
+                                            line=dict(width=1),
+                                            hovertemplate=f"{label}<br>%{{x|%d/%m/%Y}}<br>%{{y:,.0f}} euros<extra></extra>"
+                                        ))
 
-                                    # Nature
-                                    nature = tx.get('nature_mutation')
-                                    if nature:
-                                        st.write(f"**Type:** {nature}")
-                        else:
-                            st.info("Historique non disponible")
+                                fig_prix.update_layout(
+                                    height=200,
+                                    margin=dict(l=0, r=0, t=30, b=0),
+                                    title="Evolution des prix",
+                                    showlegend=True,
+                                    legend=dict(orientation="h", y=-0.2),
+                                    yaxis_title="Prix (euros)",
+                                    xaxis_title=""
+                                )
+                                st.plotly_chart(fig_prix, use_container_width=True, config={'displayModeBar': False})
+
+                        # Stats par type de bien
+                        st.markdown(f"**{len(historique)} transactions**")
+
+                        for type_bien in types_uniques:
+                            df_type = historique[historique['type_local'] == type_bien]
+                            label = get_type_label(type_bien)
+                            n = len(df_type)
+
+                            # Stats
+                            prix_min = df_type['valeur_fonciere'].min()
+                            prix_max = df_type['valeur_fonciere'].max()
+                            prix_med = df_type['valeur_fonciere'].median()
+
+                            st.markdown(f"**{label}** ({n})")
+
+                            # Prix en format lisible
+                            def fmt_prix(p):
+                                return f"{p/1e6:.2f}M" if p >= 1e6 else f"{p/1e3:.0f}k"
+
+                            st.caption(f"Min: {fmt_prix(prix_min)} | Med: {fmt_prix(prix_med)} | Max: {fmt_prix(prix_max)}")
+
+                            # Liste des transactions
+                            for _, tx in df_type.iterrows():
+                                prix = tx['valeur_fonciere']
+                                surface = tx.get('surface_reelle_bati')
+                                date_str = tx['date_mutation'].strftime('%d/%m/%Y') if pd.notna(tx['date_mutation']) else ''
+
+                                if pd.notna(surface) and surface > 0:
+                                    prix_m2 = prix / surface
+                                    st.text(f"  {date_str}: {fmt_prix(prix)} ({surface:.0f}m2)")
+                                else:
+                                    st.text(f"  {date_str}: {fmt_prix(prix)}")
                     else:
-                        st.info("Pas de vente enregistree sur cette parcelle")
+                        st.caption("Aucune vente")
                 else:
-                    st.info("Cliquez sur une parcelle coloree pour voir les details de la vente")
-
-                # Stats
-                st.markdown("---")
-                nb_avec_vente = df_geo["has_transaction"].sum() if "has_transaction" in df_geo.columns else 0
-                st.caption(f"{len(df_geo)} parcelles")
-                st.caption(f"{nb_avec_vente} avec ventes")
+                    st.caption("Cliquez sur une parcelle")
+                    nb_ventes = df_geo["has_transaction"].sum() if "has_transaction" in df_geo.columns else 0
+                    st.caption(f"{nb_ventes} ventes / {len(df_geo)} parcelles")
         else:
-            st.warning("Aucune parcelle trouvee. Chargez les donnees cadastrales avec:")
-            st.code("python -m etl.load_cadastre_dvf", language="bash")
+            st.warning("Chargez les données avec: `python -m etl.load_cadastre_dvf`")
 
     with tab_choropleth:
         fig_choro = carte_choropleth(df_filtre)
