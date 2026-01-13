@@ -330,7 +330,7 @@ def charger_historique_parcelle(id_parcelle):
     Charge l'historique des transactions pour une parcelle
     """
     try:
-        engine = create_engine(DATABASE_URL + "?client_encoding=utf8")
+        engine = create_engine(DATABASE_URL)
         query = f"""
             SELECT id_mutation, date_mutation, nature_mutation, valeur_fonciere,
                    type_local, surface_reelle_bati, nombre_pieces, adresse
@@ -341,19 +341,6 @@ def charger_historique_parcelle(id_parcelle):
         df = pd.read_sql(query, engine)
         if "date_mutation" in df.columns:
             df["date_mutation"] = pd.to_datetime(df["date_mutation"])
-        # Fix encoding issues (data may be stored as latin-1 but read as utf-8)
-        def fix_encoding(text):
-            if not isinstance(text, str):
-                return text
-            try:
-                # Try to fix mojibake (UTF-8 interpreted as Latin-1)
-                return text.encode('latin-1').decode('utf-8')
-            except (UnicodeDecodeError, UnicodeEncodeError):
-                return text
-
-        for col in ['type_local', 'nature_mutation', 'adresse']:
-            if col in df.columns:
-                df[col] = df[col].apply(fix_encoding)
         return df
     except Exception as e:
         return pd.DataFrame()
@@ -579,12 +566,10 @@ def carte_parcelles(df, show_no_transaction=True):
                 len=0.8
             ),
             hovertemplate=(
-                "<b>%{customdata[0]}</b><br>"
+                "<b>%{customdata[2]}</b><br>"
+                "%{customdata[0]} | %{customdata[3]:.0f} m2<br>"
                 "Prix: %{customdata[1]}<br>"
-                "Prix/m2: %{customdata[2]}<br>"
-                "Surface: %{customdata[3]:.0f} m2<br>"
-                "%{customdata[4]}e arr.<br>"
-                "Date: %{customdata[5]}"
+                "%{customdata[4]}e arr. | %{customdata[5]}"
                 "<extra></extra>"
             ),
             customdata=[[
@@ -1023,91 +1008,88 @@ def main():
 
                 if parcelle_found is not None:
                     id_parcelle = parcelle_found.get('id_parcelle', '')
-
-                    st.markdown(f"**Parcelle {id_parcelle}**")
-
                     historique = charger_historique_parcelle(id_parcelle)
 
+                    st.markdown(f"**{len(historique)} mutations**")
+
                     if not historique.empty:
-                        # Grouper par type de bien
-                        types_uniques = historique['type_local'].dropna().unique()
+                        # Calculer prix/m2 pour le graphique
+                        hist_with_m2 = historique[
+                            (historique['surface_reelle_bati'] > 0) &
+                            (historique['valeur_fonciere'] > 0)
+                        ].copy()
 
-                        # Graphique evolution prix par type
-                        if len(historique) > 1:
-                            hist_plot = historique[historique['valeur_fonciere'] > 0].copy()
-                            hist_plot['annee'] = hist_plot['date_mutation'].dt.year
+                        if not hist_with_m2.empty:
+                            hist_with_m2['prix_m2'] = hist_with_m2['valeur_fonciere'] / hist_with_m2['surface_reelle_bati']
 
-                            if not hist_plot.empty:
-                                fig_prix = go.Figure()
-
-                                colors = {'Appartement': '#1f77b4', 'Maison': '#2ca02c',
-                                         'Local': '#ff7f0e', 'Parking': '#9467bd'}
-
-                                for type_bien in types_uniques:
-                                    df_type = hist_plot[hist_plot['type_local'] == type_bien]
-                                    if not df_type.empty:
-                                        label = get_type_label(type_bien)
-                                        color = colors.get(label.split('/')[0].split('.')[0], '#888888')
-
-                                        fig_prix.add_trace(go.Scatter(
-                                            x=df_type['date_mutation'],
-                                            y=df_type['valeur_fonciere'],
-                                            mode='markers+lines',
-                                            name=label,
-                                            marker=dict(size=8),
-                                            line=dict(width=1),
-                                            hovertemplate=f"{label}<br>%{{x|%d/%m/%Y}}<br>%{{y:,.0f}} euros<extra></extra>"
-                                        ))
-
-                                fig_prix.update_layout(
-                                    height=200,
-                                    margin=dict(l=0, r=0, t=30, b=0),
-                                    title="Evolution des prix",
-                                    showlegend=True,
-                                    legend=dict(orientation="h", y=-0.2),
-                                    yaxis_title="Prix (euros)",
-                                    xaxis_title=""
+                            # Graphique evolution prix/m2
+                            if len(hist_with_m2) > 1:
+                                fig_m2 = go.Figure()
+                                fig_m2.add_trace(go.Scatter(
+                                    x=hist_with_m2['date_mutation'],
+                                    y=hist_with_m2['prix_m2'],
+                                    mode='markers+lines',
+                                    marker=dict(size=10, color='#1f77b4'),
+                                    line=dict(width=2, color='#1f77b4'),
+                                    hovertemplate='%{x|%d/%m/%Y}<br><b>%{y:,.0f} euros/m2</b><extra></extra>'
+                                ))
+                                fig_m2.update_layout(
+                                    height=150,
+                                    margin=dict(l=0, r=0, t=25, b=0),
+                                    title="Prix au m2",
+                                    yaxis_title="euros/m2",
+                                    showlegend=False
                                 )
-                                st.plotly_chart(fig_prix, use_container_width=True, config={'displayModeBar': False})
+                                st.plotly_chart(fig_m2, use_container_width=True, config={'displayModeBar': False})
 
-                        # Stats par type de bien
-                        st.markdown(f"**{len(historique)} transactions**")
+                        # Liste des mutations style DVF
+                        for _, tx in historique.iterrows():
+                            prix = tx['valeur_fonciere']
+                            surface = tx.get('surface_reelle_bati')
+                            type_local = tx.get('type_local', '')
+                            adresse = tx.get('adresse', '')
+                            id_mut = tx.get('id_mutation', '')
+                            date_tx = tx['date_mutation']
+                            pieces = tx.get('nombre_pieces')
 
-                        for type_bien in types_uniques:
-                            df_type = historique[historique['type_local'] == type_bien]
-                            label = get_type_label(type_bien)
-                            n = len(df_type)
+                            # Format prix
+                            if prix >= 1e6:
+                                prix_fmt = f"{prix/1e6:.2f} M euros"
+                            else:
+                                prix_fmt = f"{prix:,.0f} euros"
 
-                            # Stats
-                            prix_min = df_type['valeur_fonciere'].min()
-                            prix_max = df_type['valeur_fonciere'].max()
-                            prix_med = df_type['valeur_fonciere'].median()
+                            # Card style
+                            st.markdown("---")
+                            st.markdown(f"##### {prix_fmt}")
 
-                            st.markdown(f"**{label}** ({n})")
+                            if adresse:
+                                st.caption(adresse)
+                            if id_mut:
+                                st.caption(f"#{id_mut}")
+                            if pd.notna(date_tx):
+                                st.caption(date_tx.strftime('%d %B %Y'))
 
-                            # Prix en format lisible
-                            def fmt_prix(p):
-                                return f"{p/1e6:.2f}M" if p >= 1e6 else f"{p/1e3:.0f}k"
-
-                            st.caption(f"Min: {fmt_prix(prix_min)} | Med: {fmt_prix(prix_med)} | Max: {fmt_prix(prix_max)}")
-
-                            # Liste des transactions
-                            for _, tx in df_type.iterrows():
-                                prix = tx['valeur_fonciere']
-                                surface = tx.get('surface_reelle_bati')
-                                date_str = tx['date_mutation'].strftime('%d/%m/%Y') if pd.notna(tx['date_mutation']) else ''
-
-                                if pd.notna(surface) and surface > 0:
-                                    prix_m2 = prix / surface
-                                    st.text(f"  {date_str}: {fmt_prix(prix)} ({surface:.0f}m2)")
+                            # Details du bien
+                            details = []
+                            if type_local:
+                                label = get_type_label(type_local)
+                                if pd.notna(pieces) and pieces > 0:
+                                    details.append(f"{label} / {int(pieces)}p")
                                 else:
-                                    st.text(f"  {date_str}: {fmt_prix(prix)}")
+                                    details.append(label)
+                            if pd.notna(surface) and surface > 0:
+                                details.append(f"{surface:.0f} m2")
+                                prix_m2 = prix / surface
+                                details.append(f"({prix_m2:,.0f} euros/m2)")
+
+                            if details:
+                                st.markdown(" | ".join(details))
                     else:
-                        st.caption("Aucune vente")
+                        st.info("Aucune mutation")
                 else:
-                    st.caption("Cliquez sur une parcelle")
                     nb_ventes = df_geo["has_transaction"].sum() if "has_transaction" in df_geo.columns else 0
-                    st.caption(f"{nb_ventes} ventes / {len(df_geo)} parcelles")
+                    st.markdown(f"**{nb_ventes} ventes**")
+                    st.caption("Cliquez sur une parcelle")
         else:
             st.warning("Chargez les données avec: `python -m etl.load_cadastre_dvf`")
 
