@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS transactions (
     latitude NUMERIC,
     longitude NUMERIC,
     vefa BOOLEAN DEFAULT FALSE,
+    geom_json TEXT,
+    l_idpar TEXT,
     scraped_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -29,3 +31,4 @@ CREATE INDEX IF NOT EXISTS idx_transactions_arrondissement ON transactions(arron
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type_local);
 CREATE INDEX IF NOT EXISTS idx_transactions_nature ON transactions(nature_mutation);
 CREATE INDEX IF NOT EXISTS idx_transactions_prix ON transactions(valeur_fonciere);
+CREATE INDEX IF NOT EXISTS idx_transactions_id_mutation ON transactions(id_mutation);

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Dashboard DVF Paris
 Application Streamlit pour visualiser les transactions immobilieres a Paris
@@ -29,6 +30,8 @@ def lancer_scraping():
     from etl.scraper import run_scraper
 
     run_scraper(annee_min="2023", annee_max="2024")
+=======
+
 
 
 # Si on lance avec "python main.py", on verifie les donnees et on lance Streamlit
@@ -38,12 +41,3 @@ if __name__ == "__main__" and "streamlit" not in sys.modules:
     print("Lancement du dashboard Streamlit...")
     subprocess.run([sys.executable, "-m", "streamlit", "run", __file__])
     sys.exit(0)
-
-# A partir d'ici, c'est l'application Streamlit modularisee
-import streamlit as st
-from dash.router import render_app
-
-
-if __name__ == "__main__":
-    render_app()
-

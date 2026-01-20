@@ -13,6 +13,18 @@ from datetime import datetime
 
 # URL de base de l'API DVF+
 API_BASE_URL = "https://apidf-preprod.cerema.fr/dvf_opendata/mutations/"
+API_GEOMUTATIONS_URL = "https://apidf-preprod.cerema.fr/dvf_opendata/geomutations/"
+
+# Coordonnees approximatives des arrondissements de Paris (centre)
+COORDS_ARRONDISSEMENTS = {
+    "1": (48.8600, 2.3470), "2": (48.8680, 2.3410), "3": (48.8650, 2.3610),
+    "4": (48.8540, 2.3570), "5": (48.8460, 2.3500), "6": (48.8490, 2.3340),
+    "7": (48.8560, 2.3150), "8": (48.8740, 2.3110), "9": (48.8770, 2.3370),
+    "10": (48.8760, 2.3590), "11": (48.8600, 2.3790), "12": (48.8400, 2.3880),
+    "13": (48.8310, 2.3550), "14": (48.8330, 2.3270), "15": (48.8420, 2.2990),
+    "16": (48.8630, 2.2760), "17": (48.8870, 2.3030), "18": (48.8920, 2.3440),
+    "19": (48.8820, 2.3820), "20": (48.8640, 2.3980),
+}
 
 
 def creer_session_http():
@@ -73,7 +85,59 @@ def get_mutations_commune(code_insee, annee_min="2020", annee_max="2024", sessio
                     return resultats
 
                 page += 1
-                time.sleep(0.5)
+                time.sleep(0.1)
+                break
+
+            except requests.exceptions.RequestException as e:
+                print(f"  Tentative {attempt+1}/{max_retries} echouee pour {code_insee}: {type(e).__name__}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                else:
+                    print(f"  Abandon pour {code_insee} apres {max_retries} tentatives")
+                    return resultats
+
+    return resultats
+
+
+def get_geomutations_commune(code_insee, annee_min="2020", annee_max="2024", session=None):
+    """
+    Recupere les mutations avec geometrie des parcelles depuis l'API DVF+ geomutations
+    """
+    if session is None:
+        session = creer_session_http()
+
+    resultats = []
+    page = 1
+    page_size = 500
+    max_retries = 3
+
+    while True:
+        params = {
+            "code_insee": code_insee,
+            "anneemut_min": annee_min,
+            "anneemut_max": annee_max,
+            "page": page,
+            "page_size": page_size,
+        }
+
+        for attempt in range(max_retries):
+            try:
+                response = session.get(API_GEOMUTATIONS_URL, params=params, timeout=90)
+                response.raise_for_status()
+                data = response.json()
+
+                features = data.get("features", [])
+                if not features:
+                    return resultats
+
+                resultats.extend(features)
+                print(f"  Page {page}: {len(features)} parcelles pour {code_insee}")
+
+                if not data.get("next"):
+                    return resultats
+
+                page += 1
+                time.sleep(0.15)
                 break
 
             except requests.exceptions.RequestException as e:
@@ -105,7 +169,7 @@ def scrape_paris(annee_min="2020", annee_max="2024"):
         mutations = get_mutations_commune(code_insee, annee_min, annee_max, session)
         toutes_mutations.extend(mutations)
 
-        time.sleep(1)
+        time.sleep(0.2)
 
     print("-" * 50)
     print(f"Total mutations: {len(toutes_mutations)}")
@@ -115,6 +179,32 @@ def scrape_paris(annee_min="2020", annee_max="2024"):
 
     df = pd.DataFrame(toutes_mutations)
     return df
+
+
+def scrape_paris_geo(annee_min="2020", annee_max="2024"):
+    """
+    Scrape les donnees DVF avec geometries des parcelles pour Paris
+    """
+    toutes_features = []
+    session = creer_session_http()
+
+    print(f"Debut du scraping GEOMUTATIONS pour Paris ({len(PARIS_INSEE_CODES)} arrondissements)")
+    print(f"Periode: {annee_min} - {annee_max}")
+    print("-" * 50)
+
+    for i, code_insee in enumerate(PARIS_INSEE_CODES, 1):
+        arr_num = int(code_insee[-2:])
+        print(f"[{i}/20] Arrondissement {arr_num} ({code_insee})...")
+
+        features = get_geomutations_commune(code_insee, annee_min, annee_max, session)
+        toutes_features.extend(features)
+
+        time.sleep(0.3)
+
+    print("-" * 50)
+    print(f"Total parcelles avec geometrie: {len(toutes_features)}")
+
+    return toutes_features
 
 
 def transformer_donnees(df):
@@ -179,11 +269,21 @@ def transformer_donnees(df):
             lambda x: f"750{str(x)[-2:]}" if pd.notna(x) else None
         )
 
-    # Coordonnees GPS
-    if "latitude" in df.columns:
-        transformed["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
-    if "longitude" in df.columns:
-        transformed["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
+    # Coordonnees GPS (basees sur l'arrondissement avec decalage aleatoire)
+    import random
+    def get_coords_arr(arr):
+        if arr and str(arr) in COORDS_ARRONDISSEMENTS:
+            lat, lon = COORDS_ARRONDISSEMENTS[str(arr)]
+            # Ajouter un decalage aleatoire (environ 500m)
+            lat += random.uniform(-0.004, 0.004)
+            lon += random.uniform(-0.005, 0.005)
+            return lat, lon
+        return None, None
+
+    if "arrondissement" in transformed.columns:
+        coords = transformed["arrondissement"].apply(get_coords_arr)
+        transformed["latitude"] = coords.apply(lambda x: x[0])
+        transformed["longitude"] = coords.apply(lambda x: x[1])
 
     # ID mutation
     if "idmutation" in df.columns:
@@ -204,6 +304,92 @@ def transformer_donnees(df):
     transformed = transformed.dropna(subset=["valeur_fonciere", "date_mutation"])
 
     return transformed
+
+
+def transformer_donnees_geo(features):
+    """
+    Transforme les features GeoJSON de l'API geomutations vers notre schema
+    """
+    import json
+
+    if not features:
+        return pd.DataFrame()
+
+    records = []
+    for feature in features:
+        props = feature.get("properties", {})
+        geom = feature.get("geometry", {})
+
+        # Calculer le centroid pour latitude/longitude
+        coords = geom.get("coordinates", [[]])
+        if geom.get("type") == "Polygon" and coords and coords[0]:
+            # Centroid approximatif du polygone
+            all_coords = coords[0]
+            if all_coords:
+                lat = sum(c[1] for c in all_coords) / len(all_coords)
+                lon = sum(c[0] for c in all_coords) / len(all_coords)
+            else:
+                lat, lon = None, None
+        elif geom.get("type") == "MultiPolygon" and coords:
+            # Centroid du premier polygone
+            first_poly = coords[0][0] if coords[0] else []
+            if first_poly:
+                lat = sum(c[1] for c in first_poly) / len(first_poly)
+                lon = sum(c[0] for c in first_poly) / len(first_poly)
+            else:
+                lat, lon = None, None
+        else:
+            lat, lon = None, None
+
+        # Extraire l'arrondissement du code INSEE
+        code_insee = props.get("l_codinsee", [""])[0] if isinstance(props.get("l_codinsee"), list) else str(props.get("l_codinsee", ""))
+        if code_insee and len(code_insee) >= 2:
+            arrondissement = str(int(code_insee[-2:]))
+            code_postal = f"750{code_insee[-2:]}"
+        else:
+            arrondissement = None
+            code_postal = None
+
+        # Calculer le prix au m2
+        valeur = props.get("valeurfonc")
+        surface = props.get("sbati")
+        if valeur and surface and float(surface) > 0:
+            prix_m2 = float(valeur) / float(surface)
+        else:
+            prix_m2 = None
+
+        record = {
+            "id_mutation": props.get("idmutinvar"),
+            "date_mutation": props.get("datemut"),
+            "nature_mutation": props.get("libnatmut"),
+            "valeur_fonciere": float(valeur) if valeur else None,
+            "surface_reelle_bati": float(surface) if surface else None,
+            "surface_terrain": float(props.get("sterr")) if props.get("sterr") else None,
+            "prix_m2": prix_m2,
+            "nb_pieces": int(props.get("nbpiece")) if props.get("nbpiece") else None,
+            "type_local": props.get("libtypbien"),
+            "code_postal": code_postal,
+            "code_insee": code_insee,
+            "arrondissement": arrondissement,
+            "latitude": lat,
+            "longitude": lon,
+            "vefa": props.get("vefa", False),
+            "geom_json": json.dumps(geom) if geom else None,
+            "l_idpar": json.dumps(props.get("l_idpar", [])),
+            "scraped_at": datetime.now()
+        }
+        records.append(record)
+
+    df = pd.DataFrame(records)
+
+    # Convertir les dates
+    if "date_mutation" in df.columns:
+        df["date_mutation"] = pd.to_datetime(df["date_mutation"], errors="coerce")
+
+    # Supprimer les lignes sans donnees essentielles
+    df = df.dropna(subset=["valeur_fonciere", "date_mutation"])
+
+    return df
 
 
 def charger_en_bdd(df, table_name="transactions"):
@@ -237,32 +423,83 @@ def vider_table(table_name="transactions"):
     print(f"Table {table_name} videe")
 
 
+def indexer_elasticsearch(df):
+    """
+    Indexe les donnees dans Elasticsearch
+    """
+    try:
+        from etl.elasticsearch_utils import attendre_elasticsearch, creer_index, indexer_transactions
+
+        print("\n[4/4] Indexation Elasticsearch...")
+        if attendre_elasticsearch(max_tentatives=10, delai=3):
+            creer_index()
+            indexer_transactions(df)
+        else:
+            print("Elasticsearch non disponible, indexation ignoree")
+    except ImportError:
+        print("Module Elasticsearch non disponible")
+    except Exception as e:
+        print(f"Erreur indexation Elasticsearch: {e}")
+
+
 def run_scraper(annee_min="2020", annee_max="2024", vider_avant=True):
     """
-    Fonction principale pour executer le pipeline ETL complet
+    Fonction principale pour executer le pipeline ETL complet (sans geometries)
     """
     print("=" * 60)
     print("DVF+ Paris Scraper")
     print("=" * 60)
 
-    # Etape 1: Scraper les donnees
-    print("\n[1/3] Scraping depuis l'API DVF+...")
+    print("\n[1/4] Scraping depuis l'API DVF+...")
     raw_df = scrape_paris(annee_min, annee_max)
 
     if raw_df.empty:
         print("Aucune donnee recuperee.")
         return
 
-    # Etape 2: Transformer les donnees
-    print("\n[2/3] Transformation des donnees...")
+    print("\n[2/4] Transformation des donnees...")
     transformed_df = transformer_donnees(raw_df)
     print(f"{len(transformed_df)} enregistrements valides")
 
-    # Etape 3: Charger en BDD
-    print("\n[3/3] Chargement en base de donnees...")
+    print("\n[3/4] Chargement en base de donnees PostgreSQL...")
     if vider_avant:
         vider_table()
     charger_en_bdd(transformed_df)
+
+    indexer_elasticsearch(transformed_df)
+
+    print("\n" + "=" * 60)
+    print("Scraping termine!")
+    print("=" * 60)
+
+    return transformed_df
+
+
+def run_scraper_geo(annee_min="2020", annee_max="2024", vider_avant=True):
+    """
+    Fonction principale pour executer le pipeline ETL avec geometries des parcelles
+    """
+    print("=" * 60)
+    print("DVF+ Paris Scraper - AVEC GEOMETRIES PARCELLES")
+    print("=" * 60)
+
+    print("\n[1/4] Scraping depuis l'API DVF+ geomutations...")
+    features = scrape_paris_geo(annee_min, annee_max)
+
+    if not features:
+        print("Aucune donnee recuperee.")
+        return
+
+    print("\n[2/4] Transformation des donnees GeoJSON...")
+    transformed_df = transformer_donnees_geo(features)
+    print(f"{len(transformed_df)} enregistrements valides avec geometries")
+
+    print("\n[3/4] Chargement en base de donnees PostgreSQL...")
+    if vider_avant:
+        vider_table()
+    charger_en_bdd(transformed_df)
+
+    indexer_elasticsearch(transformed_df)
 
     print("\n" + "=" * 60)
     print("Scraping termine!")
@@ -272,4 +509,8 @@ def run_scraper(annee_min="2020", annee_max="2024", vider_avant=True):
 
 
 if __name__ == "__main__":
-    run_scraper(annee_min="2020", annee_max="2024")
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--geo":
+        run_scraper_geo(annee_min="2024", annee_max="2024")
+    else:
+        run_scraper(annee_min="2024", annee_max="2024")

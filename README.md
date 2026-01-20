@@ -1,99 +1,246 @@
-# DVF Paris - Analyse des transactions immobilieres
+# DVF Paris - Analyse des Transactions Immobilieres
 
-Projet de Data Engineering - Scraping et visualisation des donnees DVF (Demandes de Valeurs Foncieres) pour Paris.
+Projet de Data Engineering pour le scraping, stockage et visualisation des donnees DVF (Demandes de Valeurs Foncieres) de Paris.
 
-## Description
+## Presentation du Projet
 
-Cette application scrape les donnees de transactions immobilieres depuis l'API DVF+ du Cerema pour les 20 arrondissements de Paris, les stocke dans une base PostgreSQL et les affiche via un dashboard Streamlit interactif.
+Cette application permet d'analyser les transactions immobilieres des 20 arrondissements de Paris. Elle collecte les donnees depuis l'API DVF+ du Cerema, les stocke dans une base PostgreSQL, les indexe dans Elasticsearch pour la recherche, et les affiche via un dashboard Streamlit interactif.
 
-## Fonctionnalites
+### Fonctionnalites principales
 
-- Scraping en temps reel depuis l'API DVF+ au lancement
-- Stockage des donnees dans PostgreSQL avec PostGIS
-- Dashboard interactif avec filtres
-- Visualisations:
-  - Timeline des achats d'appartements
-  - Indicateur des grosses ventes (configurable)
-  - Prix median par arrondissement
-  - Evolution des prix dans le temps
-  - Distribution du prix au m2
-  - Prix par type de bien
-  - Repartition par type de vente
+- Scraping automatique des donnees DVF au lancement
+- Stockage relationnel dans PostgreSQL avec extension PostGIS
+- Moteur de recherche avance avec Elasticsearch
+- Dashboard interactif avec filtres multiples
+- Carte choroplethe par arrondissement
+- Carte des transactions individuelles
+- 7 types de visualisations analytiques
 
-## Architecture
+## Architecture Technique
 
 ```
-projet/
-├── main.py                 # Application Streamlit
+Projet_data_engineering/
+│
+├── main.py                      # Application Streamlit (dashboard)
+├── docker-compose.yml           # Orchestration des 3 services
+├── requirements.txt             # Dependances Python
+├── .env.example                 # Variables d'environnement
+│
 ├── etl/
-│   └── scraper.py          # Scraper API DVF+
+│   ├── scraper.py               # Pipeline ETL (Extract-Transform-Load)
+│   ├── elasticsearch_utils.py   # Module indexation et recherche ES
+│   ├── download.py              # Telechargement CSV (alternatif)
+│   └── clean_load.py            # Nettoyage CSV (alternatif)
+│
 ├── docker/
-│   ├── Dockerfile          # Image Docker
-│   ├── entrypoint.sh       # Script de demarrage
-│   └── init-db.sql         # Schema BDD
-├── docker-compose.yml      # Orchestration des services
-└── requirements.txt        # Dependances Python
+│   ├── Dockerfile               # Image de l'application
+│   ├── entrypoint.sh            # Script de demarrage
+│   └── init-db.sql              # Schema de la base de donnees
+│
+└── data/                        # Donnees brutes (si telechargement CSV)
 ```
 
-## Technologies utilisees
+## Stack Technique
 
-| Composant | Technologie |
-|-----------|-------------|
-| Backend | Python 3.11 |
-| Web App | Streamlit |
-| Base de donnees | PostgreSQL 16 + PostGIS |
-| Visualisation | Plotly |
-| Containerisation | Docker, docker-compose |
-| Source de donnees | API DVF+ Cerema |
+| Composant | Technologie | Version |
+|-----------|-------------|---------|
+| Langage | Python | 3.11 |
+| Application Web | Streamlit | >= 1.30 |
+| Base de donnees | PostgreSQL + PostGIS | 16 |
+| Moteur de recherche | Elasticsearch | 8.11 |
+| Visualisation | Plotly | >= 5.18 |
+| Containerisation | Docker + docker-compose | - |
+| Source de donnees | API DVF+ Cerema | - |
 
-## Lancement
+## Pre-requis
 
-### Avec Docker (recommande)
+- Docker et docker-compose installes
+- 4 Go de RAM minimum (Elasticsearch necessite de la memoire)
+- Connexion internet (pour le scraping et les cartes)
+
+## Installation et Lancement
+
+### Methode recommandee : Docker Compose
 
 ```bash
-# Construire et lancer les containers
+# Cloner le repository
+git clone <url-du-repo>
+cd Projet_data_engineering
+
+# Lancer tous les services
 docker-compose up --build
-
-# L'application sera disponible sur http://localhost:8501
 ```
 
-Le scraping se fait automatiquement au demarrage.
+L'application sera accessible sur **http://localhost:8501**
 
-### Sans Docker (developpement local)
+Le premier lancement prend quelques minutes car :
+1. Les images Docker sont telechargees
+2. Elasticsearch demarre (30-60 secondes)
+3. Les donnees sont scrapees depuis l'API (~5-10 minutes selon la periode)
+4. Les donnees sont indexees dans Elasticsearch
 
-1. Installer les dependances:
+### Methode alternative : Installation locale
+
 ```bash
+# Installer les dependances
 pip install -r requirements.txt
-```
 
-2. Lancer PostgreSQL localement (avec PostGIS)
+# Demarrer PostgreSQL et Elasticsearch localement
+# (voir docker-compose.yml pour la configuration)
 
-3. Executer le scraper:
-```bash
+# Lancer le scraper
 python etl/scraper.py
-```
 
-4. Lancer l'application:
-```bash
+# Lancer l'application
 streamlit run main.py
 ```
 
+## Services Docker
+
+| Service | Port | Description |
+|---------|------|-------------|
+| app | 8501 | Dashboard Streamlit |
+| db | 5432 | PostgreSQL + PostGIS |
+| elasticsearch | 9200 | Moteur de recherche |
+
 ## Configuration
 
-Variables d'environnement:
+Variables d'environnement (definies dans docker-compose.yml) :
 
-| Variable | Description | Defaut |
-|----------|-------------|--------|
-| DATABASE_URL | URL de connexion PostgreSQL | postgresql://dvf:dvf@localhost:5432/dvf |
+| Variable | Description | Valeur par defaut |
+|----------|-------------|-------------------|
+| DATABASE_URL | Connexion PostgreSQL | postgresql://dvf:dvf@db:5432/dvf |
+| ELASTICSEARCH_URL | URL Elasticsearch | http://elasticsearch:9200 |
 
-## Source des donnees
+## Fonctionnalites du Dashboard
 
-Les donnees proviennent de l'API DVF+ du Cerema:
-- URL: https://apidf-preprod.cerema.fr/dvf_opendata/mutations/
-- Documentation: https://datafoncier.cerema.fr
+### Indicateurs cles (KPIs)
+- Nombre total de transactions
+- Prix moyen des transactions
+- Prix median au m2
+- Surface moyenne
+- Nombre de grosses ventes (top 5%)
 
-Les donnees DVF sont mises a jour 2 fois par an (avril et octobre).
+### Moteur de recherche Elasticsearch
+- Recherche textuelle ("appartement 16eme", "maison 5 pieces")
+- Filtrage par budget
+- Resultats tries par date
+
+### Cartes interactives
+- **Carte choroplethe** : Prix median au m2 par arrondissement (coloree)
+- **Carte des transactions** : Points individuels avec details au survol
+
+### Graphiques analytiques
+1. Timeline des transactions par mois
+2. Indicateur des grosses ventes (seuil configurable)
+3. Prix median par arrondissement
+4. Evolution des prix dans le temps
+5. Distribution du prix au m2 (boxplot)
+6. Prix par type de bien
+7. Repartition par type de vente
+
+### Filtres disponibles
+- Periode (date debut / fin)
+- Arrondissements (selection multiple)
+- Type de bien (Appartement, Maison, Local, etc.)
+- Type de vente (Vente, VEFA, etc.)
+- Plage de prix
+
+## Pipeline ETL
+
+Le pipeline ETL s'execute automatiquement au demarrage :
+
+```
+[1/4] Scraping API DVF+ Cerema
+      └─> Recuperation des mutations pour les 20 arrondissements
+      └─> Pagination automatique (500 resultats/page)
+      └─> Gestion des erreurs et retry
+
+[2/4] Transformation des donnees
+      └─> Mapping des champs API vers schema BDD
+      └─> Calcul du prix au m2
+      └─> Generation des coordonnees GPS
+      └─> Nettoyage des valeurs manquantes
+
+[3/4] Chargement PostgreSQL
+      └─> Insertion par lots de 1000 enregistrements
+      └─> Tables indexees pour les requetes
+
+[4/4] Indexation Elasticsearch
+      └─> Creation de l'index avec mapping
+      └─> Indexation en bulk des transactions
+      └─> Champs optimises pour la recherche
+```
+
+## Source des Donnees
+
+Les donnees proviennent de l'API DVF+ du Cerema :
+- **URL** : https://apidf-preprod.cerema.fr/dvf_opendata/mutations/
+- **Documentation** : https://datafoncier.cerema.fr
+- **Mise a jour** : 2 fois par an (avril et octobre)
+- **Couverture** : Transactions immobilieres en France
+
+## Schema de la Base de Donnees
+
+Table `transactions` :
+
+| Colonne | Type | Description |
+|---------|------|-------------|
+| id | SERIAL | Identifiant unique |
+| id_mutation | VARCHAR | ID mutation DVF |
+| date_mutation | DATE | Date de la transaction |
+| valeur_fonciere | NUMERIC | Prix de vente |
+| surface_reelle_bati | NUMERIC | Surface en m2 |
+| prix_m2 | NUMERIC | Prix au m2 calcule |
+| nb_pieces | INTEGER | Nombre de pieces |
+| type_local | VARCHAR | Type de bien |
+| nature_mutation | VARCHAR | Type de vente |
+| code_postal | VARCHAR | Code postal |
+| arrondissement | VARCHAR | Numero d'arrondissement |
+| latitude | NUMERIC | Coordonnee GPS |
+| longitude | NUMERIC | Coordonnee GPS |
+| scraped_at | TIMESTAMP | Date de scraping |
+
+## Developpement
+
+### Relancer le scraping manuellement
+
+```bash
+# Depuis le container
+docker-compose exec app python etl/scraper.py
+
+# Ou localement
+python etl/scraper.py
+```
+
+### Reinitialiser les donnees
+
+```bash
+# Supprimer les volumes et relancer
+docker-compose down -v
+docker-compose up --build
+```
+
+### Acceder a PostgreSQL
+
+```bash
+docker-compose exec db psql -U dvf -d dvf
+```
+
+### Acceder a Elasticsearch
+
+```bash
+# Verifier le statut
+curl http://localhost:9200/_cluster/health
+
+# Compter les documents
+curl http://localhost:9200/dvf_transactions/_count
+```
 
 ## Auteurs
 
-Projet realise dans le cadre de l'unite Data Engineering E4.
+Projet realise dans le cadre de l'unite Data Engineering, Iris Carron et Cléo Detrez.
+
+## Licence
+
+Donnees DVF : Licence Ouverte / Open Licence (Etalab)
