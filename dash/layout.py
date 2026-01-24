@@ -166,26 +166,29 @@ def render_filters(df):
             df["arrondissement"].dropna().unique(),
             key=lambda x: int(x) if str(x).isdigit() else 0,
         )
-        arr_selected = st.multiselect(
+        arr_selected_value = st.selectbox(
             "Arrondissements",
-            arrondissements,
-            default=arrondissements,
+            ["Tous"] + list(arrondissements),
+            index=0,
         )
+        arr_selected = list(arrondissements) if arr_selected_value == "Tous" else [arr_selected_value]
 
         types = sorted(df["type_local"].dropna().unique())
-        types_selected = st.multiselect(
+        types_selected_value = st.selectbox(
             "Type de bien",
-            types,
-            default=types,
+            ["Tous"] + list(types),
+            index=0,
         )
+        types_selected = list(types) if types_selected_value == "Tous" else [types_selected_value]
 
         if "nature_mutation" in df.columns:
             natures = sorted(df["nature_mutation"].dropna().unique())
-            natures_selected = st.multiselect(
+            natures_selected_value = st.selectbox(
                 "Type de vente",
-                natures,
-                default=natures,
+                ["Tous"] + list(natures),
+                index=0,
             )
+            natures_selected = list(natures) if natures_selected_value == "Tous" else [natures_selected_value]
         else:
             natures_selected = []
 

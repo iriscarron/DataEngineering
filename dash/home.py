@@ -6,6 +6,13 @@ import streamlit as st
 from dash.layout import PRIMARY_COLOR, SECONDARY_COLOR, ACCENT_COLOR, styliser_fig
 
 
+def _ensure_data(df):
+    if df.empty:
+        st.warning("Aucune donnee disponible. Lancez d'abord le scraper.")
+        return False
+    return True
+
+
 def afficher_kpis(df):
     """Affiche les indicateurs cles en haut du dashboard."""
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -104,7 +111,7 @@ def graphique_prix_arrondissement(df):
         title="Prix median par arrondissement",
         labels={"arrondissement": "Arrondissement", "valeur_fonciere": "Prix median (euros)"},
         color="valeur_fonciere",
-        color_continuous_scale="Reds",
+        color_continuous_scale="Blues",
     )
     fig.update_traces(marker_line_width=0)
     return styliser_fig(fig)
@@ -192,15 +199,27 @@ def graphique_nature_mutation(df):
 
 
 def render_home(df, filters):
-    """Rend la page principale avec KPIs et graphiques."""
-    if df.empty:
-        st.warning("Aucune donnee disponible. Lancez d'abord le scraper.")
+    """Page d'accueil: texte explicatif sans graphiques."""
+    st.subheader("Bienvenue sur le dashboard DVF Paris")
+    st.markdown(
+        """
+        Ce tableau de bord presente les transactions immobilieres parisiennes a partir des donnees DVF+.
+
+        - **Transactions** : volume mensuel et grosses ventes.
+        - **Prix** : medianes par arrondissement, evolution et distribution des prix au m2.
+        - **Carte** : visualisation geographique interactive.
+        - **Setup** : chargement des donnees et configuration de la base.
+        
+        Utilisez les filtres en haut de page pour ajuster arrondissement, type de bien, nature de mutation et bornes de dates.
+        """
+    )
+
+
+def render_transactions(df, filters):
+    if not _ensure_data(df):
         return
 
     seuil_percentile = filters.get("seuil_percentile", 95)
-
-    afficher_kpis(df)
-    st.divider()
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -212,31 +231,31 @@ def render_home(df, filters):
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-    col3, col4 = st.columns(2)
-    with col3:
+    fig = graphique_nature_mutation(df)
+    if fig:
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def render_prix(df):
+    if not _ensure_data(df):
+        return
+
+    col1, col2 = st.columns(2)
+    with col1:
         fig = graphique_prix_arrondissement(df)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
-    with col4:
+    with col2:
         fig = graphique_evolution_prix(df)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
-    col5, col6 = st.columns(2)
-    with col5:
+    col3, col4 = st.columns([1, 1])
+    with col3:
         fig = graphique_prix_m2(df)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
-    with col6:
+    with col4:
         fig = graphique_type_bien(df)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
-
-    col7, col8 = st.columns([1, 2])
-    with col7:
-        fig = graphique_nature_mutation(df)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-    with col8:
-        st.subheader("Apercu des donnees")
-        st.dataframe(df.head(100), use_container_width=True, hide_index=True)

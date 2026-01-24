@@ -1,6 +1,6 @@
 import streamlit as st
 
-from dash import about, carte, carteregion, home, navbar, setup, simplepage
+from dash import about, carte, home, navbar, setup, simplepage
 from dash import layout
 
 
@@ -21,8 +21,9 @@ def render_app():
 
     pages = {
         "Accueil": lambda: home.render_home(df_filtre, filters),
+        "Transactions": lambda: home.render_transactions(df_filtre, filters),
+        "Prix": lambda: home.render_prix(df_filtre),
         "Carte": lambda: carte.render_carte(df_filtre),
-        "Chaleur": lambda: carteregion.render_carte_region(df_filtre),
         "Setup": lambda: setup.render_setup(df, df_filtre),
         "Simple": lambda: simplepage.render_simple(df_filtre),
         "A propos": about.render_about,
