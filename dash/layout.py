@@ -1,3 +1,5 @@
+"""Layout, theming, and data loading utilities for DVF Paris Analytics."""
+
 import os
 import pandas as pd
 import streamlit as st
@@ -32,9 +34,10 @@ def configure_page():
 def apply_theme():
     """Applique le theming global: tons bleus, fond noir, filtres verts turquoise."""
     st.markdown(
-        f"""
+        """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url(
+        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         :root {{
             --primary:#0ea5e9;
             --accent:#2563eb;
@@ -50,7 +53,8 @@ def apply_theme():
             background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%) !important;
             color: #ffffff;
         }}
-        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] label {{
+        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3, [data-testid="stSidebar"] label {{
             color: #ffffff !important;
             font-weight: 600;
         }}
@@ -105,17 +109,24 @@ def apply_theme():
 def styliser_fig(fig):
     """Uniformise la mise en forme des figures Plotly: fond noir, texte blanc, bleu."""
     fig.update_layout(
-        font=dict(family="Inter", color="#ffffff", size=12),
-        title_font=dict(size=18, color="#ffffff", family="Inter", weight=700),
+        font={"family": "Inter", "color": "#ffffff", "size": 12},
+        title_font={"size": 18, "color": "#ffffff", "family": "Inter", "weight": 700},
         plot_bgcolor="#0f0f1e",
         paper_bgcolor="#1a1a2e",
-        hoverlabel=dict(bgcolor="#16213e", font_size=12, font_family="Inter", namelength=-1, font_color="#ffffff"),
-        margin=dict(t=60, b=40, l=40, r=20),
-        legend=dict(orientation="h", y=-0.25, x=0, title=None, font=dict(color="#ffffff")),
+        hoverlabel={
+            "bgcolor": "#16213e",
+            "font_size": 12,
+            "font_family": "Inter",
+            "namelength": -1,
+            "font_color": "#ffffff"
+        },
+        margin={"t": 60, "b": 40, "l": 40, "r": 20},
+        legend={"orientation": "h", "y": -0.25,
+                "x": 0, "title": None, "font": {"color": "#ffffff"}},
         colorway=COLORWAY,
         hovermode="closest",
-        xaxis=dict(showgrid=True, gridwidth=1, gridcolor="#334155"),
-        yaxis=dict(showgrid=True, gridwidth=1, gridcolor="#334155"),
+        xaxis={"showgrid": True, "gridwidth": 1, "gridcolor": "#334155"},
+        yaxis={"showgrid": True, "gridwidth": 1, "gridcolor": "#334155"},
     )
     return fig
 
@@ -149,57 +160,44 @@ def render_filters(df):
     if df.empty:
         return df, {"seuil_percentile": 95}
 
+    def _select_multi(options, label):
+        choice = st.selectbox(label, ["Tous"] + list(options), index=0)
+        return list(options) if choice == "Tous" else [choice]
+
     with st.sidebar:
         st.header("Filtres")
-
-        min_date = df["date_mutation"].min().date()
-        max_date = df["date_mutation"].max().date()
-
         date_range = st.date_input(
             "Periode",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
+            value=(df["date_mutation"].min().date(), df["date_mutation"].max().date()),
+            min_value=df["date_mutation"].min().date(),
+            max_value=df["date_mutation"].max().date(),
         )
 
         arrondissements = sorted(
             df["arrondissement"].dropna().unique(),
             key=lambda x: int(x) if str(x).isdigit() else 0,
         )
-        arr_selected_value = st.selectbox(
-            "Arrondissements",
-            ["Tous"] + list(arrondissements),
-            index=0,
-        )
-        arr_selected = list(arrondissements) if arr_selected_value == "Tous" else [arr_selected_value]
+        arr_selected = _select_multi(arrondissements, "Arrondissements")
 
         types = sorted(df["type_local"].dropna().unique())
-        types_selected_value = st.selectbox(
-            "Type de bien",
-            ["Tous"] + list(types),
-            index=0,
-        )
-        types_selected = list(types) if types_selected_value == "Tous" else [types_selected_value]
+        types_selected = _select_multi(types, "Type de bien")
 
         if "nature_mutation" in df.columns:
             natures = sorted(df["nature_mutation"].dropna().unique())
-            natures_selected_value = st.selectbox(
-                "Type de vente",
-                ["Tous"] + list(natures),
-                index=0,
-            )
-            natures_selected = list(natures) if natures_selected_value == "Tous" else [natures_selected_value]
+            natures_selected = _select_multi(natures, "Type de vente")
         else:
             natures_selected = []
 
         st.subheader("Filtres prix")
         max_valeur = int(df["valeur_fonciere"].max()) if not df.empty else 1
-        slider_top = int(df["valeur_fonciere"].quantile(0.99)) if not df.empty else max_valeur
         prix_min, prix_max = st.slider(
             "Plage de prix (euros)",
             min_value=0,
             max_value=max(max_valeur, 1),
-            value=(0, max(slider_top, 1)),
+            value=(
+                0,
+                max(int(df["valeur_fonciere"].quantile(0.99)) if not df.empty else max_valeur, 1),
+            ),
         )
 
         seuil_percentile = st.slider(
