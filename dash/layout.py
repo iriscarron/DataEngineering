@@ -26,7 +26,7 @@ px.defaults.color_discrete_sequence = COLORWAY
 
 def configure_page():
     """Configure la page Streamlit (doit etre appele en premier)."""
-    st.set_page_config(page_title="DVF Paris", layout="wide", page_icon="🏠")
+    st.set_page_config(page_title="DVF Paris", layout="wide")
 
 
 def apply_theme():

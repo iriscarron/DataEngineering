@@ -1,6 +1,6 @@
 import streamlit as st
 
-from dash import about, carte, home, navbar, setup, simplepage
+from dash import about, carte, home, navbar, setup, simplepage, recherche
 from dash import layout
 
 
@@ -8,12 +8,25 @@ def render_app():
     layout.configure_page()
     layout.apply_theme()
 
-    st.title("DVF Paris - Transactions Immobilieres")
-    st.caption("Donnees scrapees depuis l'API DVF+ du Cerema")
+    # En-tête avec design amélioré
+    st.markdown(
+        """
+        <div style='text-align: center; padding: 1.5rem 0 1rem 0;'>
+            <h1 style='color: #0ea5e9; font-size: 2.8rem; font-weight: 800; margin: 0;
+                       text-shadow: 0 2px 4px rgba(14, 165, 233, 0.3);'>
+                DVF Paris - Transactions Immobilières
+            </h1>
+            <p style='color: #94a3b8; font-size: 1.1rem; margin-top: 0.5rem;'>
+                Données scrapées depuis l'API DVF+ du Cerema • Analyse intelligente avec Elasticsearch
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     df = layout.charger_donnees()
     if df.empty:
-        st.warning("Aucune donnee disponible. Lancez le scraper ou verifiez la base.")
+        st.warning("Aucune donnée disponible. Lancez le scraper ou vérifiez la base.")
         st.info("Commandes utiles: docker-compose up -d puis python etl/scraper.py")
         return
 
@@ -24,9 +37,9 @@ def render_app():
         "Transactions": lambda: home.render_transactions(df_filtre, filters),
         "Prix": lambda: home.render_prix(df_filtre),
         "Carte": lambda: carte.render_carte(df_filtre),
+        "Recherche": lambda: recherche.render_recherche(df),
         "Setup": lambda: setup.render_setup(df, df_filtre),
-        "Simple": lambda: simplepage.render_simple(df_filtre),
-        "A propos": about.render_about,
+        "À propos": about.render_about,
     }
 
     choix = navbar.navbar(list(pages.keys()))

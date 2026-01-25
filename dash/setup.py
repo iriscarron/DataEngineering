@@ -25,8 +25,8 @@ def render_setup(df, df_filtre):
         "Donnees chargees": not df.empty,
     }
     for label, ok in checks.items():
-        icon = "✅" if ok else "⚠️"
-        st.write(f"{icon} {label}")
+        status = "OK" if ok else "Attention"
+        st.write(f"{status} - {label}")
 
     st.subheader("Conseils")
     st.markdown(
