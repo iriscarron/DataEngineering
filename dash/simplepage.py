@@ -1,7 +1,11 @@
+"""Page simple de test pour afficher un extrait du DataFrame."""
+
 import streamlit as st
 
 
 def render_simple(df):
+    """Affiche une page de test avec un aperçu des données."""
+
     st.header("Page simple")
     st.write("Utilisez cette page comme zone de test pour vos composants.")
     st.write(f"Lignes visibles: {len(df):,}")
