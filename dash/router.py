@@ -1,10 +1,14 @@
+"""Router principal des pages Streamlit de l'application DVF Paris."""
+
 import streamlit as st
 
-from dash import about, carte, home, navbar, setup, simplepage, recherche
+from dash import about, carte, home, navbar, setup, recherche
 from dash import layout
 
 
 def render_app():
+    """Configure la page, applique le thème et route vers la vue choisie."""
+
     layout.configure_page()
     layout.apply_theme()
 
@@ -17,7 +21,8 @@ def render_app():
                 DVF Paris - Transactions Immobilières
             </h1>
             <p style='color: #94a3b8; font-size: 1.1rem; margin-top: 0.5rem;'>
-                Données scrapées depuis l'API DVF+ du Cerema • Analyse intelligente avec Elasticsearch
+                Données scrapées depuis l'API DVF+ du Cerema<br>
+                Analyse intelligente avec Elasticsearch
             </p>
         </div>
         """,
