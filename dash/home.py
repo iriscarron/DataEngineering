@@ -243,7 +243,7 @@ def graphique_type_bien(df):
         labels={"type_local": "Type", "prix_median": "Prix médian (€)", "nb_ventes": "Nb ventes"},
         text="nb_ventes",
         color_continuous_scale="Viridis",
-        height=520
+        height=750
     )
     fig.update_traces(
         textposition="outside",
