@@ -1,0 +1,22 @@
+[33mac6fd34[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m code home vérifié
+[33m29bb7f0[m code amélioré carte
+[33m54e5851[m code améliorer about
+[33m4533caf[m amélioration du visuel du dash
+[33m6ae03e5[m modification du dash
+[33mfed3c03[m pb de conflit
+[33m511702b[m mise en place des fichiers dash + commencement des modfis de couleures
+[33mf003b80[m carte est fixed
+[33mb290712[m scrap bndb
+[33m91787a0[m ui fix
+[33me8e1a83[m details, marche pas
+[33m6eaf819[m la carte des parcelle marche ! test uniquement sur 1 arrondissement pr une année
+[33m6e90075[m carte parcelle pas bien
+[33m09b6b61[m zoom de carte, mais pas les parcelles
+[33m82ef5a1[m trop long le dl des arrondissement, carte ecrite mais pas tester  ds l'idee
+[33mebd83cd[m tout est dans le main.py
+[33m856da85[m premiere version dash
+[33m151c64e[m Resolve README conflict (keep remote)
+[33me8c7015[m[33m ([m[1;31morigin/master[m[33m)[m docker dockerfile
+[33mf460c5b[m squelette
+[33m7ee2d96[m test
+[33me8f0181[m Initial commit
