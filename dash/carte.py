@@ -1,9 +1,8 @@
+"""Carte interactive des transactions géolocalisées."""
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
-import pandas as pd
 
-from dash.layout import styliser_fig, PRIMARY_COLOR, SECONDARY_COLOR
+from dash.layout import styliser_fig
 
 
 def render_carte(df):
@@ -16,20 +15,25 @@ def render_carte(df):
     if df_map.empty:
         st.info("Pas de coordonnées disponibles pour la carte.")
         return
-    
+
     # En-tête de section
     st.markdown(
         """
-        <div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%); 
+        <div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
                     padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem;
-                    border: 1px solid #0ea5e9; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);'>
-            <h2 style='color: #0ea5e9; margin: 0;'>Cartographie Interactive des Transactions</h2>
-            <p style='color: #94a3b8; margin-top: 0.5rem;'>Visualisation géographique de {count:,} transactions à Paris</p>
+                    border: 1px solid #0ea5e9;
+                    box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);'>
+            <h2 style='color: #0ea5e9; margin: 0;'>
+                Cartographie Interactive des Transactions
+            </h2>
+            <p style='color: #94a3b8; margin-top: 0.5rem;'>
+                Visualisation géographique de {len(df_map):,}
+                transactions à Paris
+            </p>
         </div>
-        """.format(count=len(df_map)),
+        """,
         unsafe_allow_html=True
     )
-    
     # Options d'affichage
     col_opt1, col_opt2 = st.columns(2)
     with col_opt1:
@@ -44,7 +48,6 @@ def render_carte(df):
             ["surface_reelle_bati", "valeur_fonciere", "uniforme"],
             index=0
         )
-    
     # Carte scatter mapbox améliorée
     kwargs = {
         "data_frame": df_map,
@@ -64,29 +67,23 @@ def render_carte(df):
         "title": f"{len(df_map):,} transactions géolocalisées à Paris",
         "height": 700,
     }
-    
     if color_by == "prix_m2":
         kwargs["color"] = "prix_m2"
         kwargs["color_continuous_scale"] = "Viridis"
     else:
         kwargs["color"] = color_by
         kwargs["color_discrete_sequence"] = px.colors.sequential.PuBuGn
-    
     if size_by != "uniforme":
         kwargs["size"] = size_by
-    
     fig = px.scatter_mapbox(**kwargs)
     fig.update_layout(mapbox_style="carto-positron")
-    
     # Style des marqueurs selon le choix
     if size_by == "uniforme":
-        fig.update_traces(marker=dict(size=8, opacity=0.6))
+        fig.update_traces(marker={"size": 8, "opacity": 0.6})
     else:
-        fig.update_traces(marker=dict(opacity=0.7))
-    
+        fig.update_traces(marker={"opacity": 0.7})
     styliser_fig(fig)
     st.plotly_chart(fig, use_container_width=True)
-    
     # Légende interactive
     st.markdown(
         """
