@@ -1,10 +1,14 @@
 """Page d'accueil et graphiques pour DVF Paris Analytics."""
 
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+
 from dash.layout import PRIMARY_COLOR, SECONDARY_COLOR, styliser_fig
+
+
 
 
 def _ensure_data(df):
@@ -15,9 +19,12 @@ def _ensure_data(df):
     return True
 
 
+
+
 def afficher_kpis(df):
     """Affiche les indicateurs clés avec design premium et animations."""
     col1, col2, col3, col4, col5 = st.columns(5)
+
 
     with col1:
         st.markdown(
@@ -32,6 +39,7 @@ def afficher_kpis(df):
             """,
             unsafe_allow_html=True
         )
+
 
     with col2:
         prix_moyen = df["valeur_fonciere"].mean()
@@ -48,6 +56,7 @@ def afficher_kpis(df):
             unsafe_allow_html=True
         )
 
+
     with col3:
         prix_m2_median = df["prix_m2"].median()
         st.markdown(
@@ -63,6 +72,7 @@ def afficher_kpis(df):
             unsafe_allow_html=True
         )
 
+
     with col4:
         surface_moyenne = df["surface_reelle_bati"].mean()
         st.markdown(
@@ -77,6 +87,7 @@ def afficher_kpis(df):
             """,
             unsafe_allow_html=True
         )
+
 
     with col5:
         seuil_grosse_vente = df["valeur_fonciere"].quantile(0.95)
@@ -95,14 +106,18 @@ def afficher_kpis(df):
         )
 
 
+
+
 def graphique_timeline(df):
     """Bar chart du volume de transactions par mois."""
     if df.empty:
         return None
 
+
     ts = df.copy()
     ts["mois"] = ts["date_mutation"].dt.to_period("M").astype(str)
     agg = ts.groupby("mois").size().reset_index(name="nb_transactions")
+
 
     fig = px.bar(
         agg,
@@ -121,13 +136,17 @@ def graphique_timeline(df):
     return styliser_fig(fig)
 
 
+
+
 def graphique_grosses_ventes(df, seuil_percentile=95):
     """Scatter des grosses ventes (au-dessus d'un seuil percentile)."""
     if df.empty:
         return None
 
+
     seuil = df["valeur_fonciere"].quantile(seuil_percentile / 100)
     grosses_ventes = df[df["valeur_fonciere"] >= seuil].copy()
+
 
     fig = px.scatter(
         grosses_ventes,
@@ -152,10 +171,13 @@ def graphique_grosses_ventes(df, seuil_percentile=95):
     return styliser_fig(fig)
 
 
+
+
 def graphique_prix_arrondissement(df):
     """Bar chart du prix médian par arrondissement."""
     if df.empty:
         return None
+
 
     agg = df.groupby("arrondissement").agg({
         "valeur_fonciere": "median",
@@ -163,6 +185,7 @@ def graphique_prix_arrondissement(df):
     }).reset_index()
     agg["arr_num"] = pd.to_numeric(agg["arrondissement"], errors="coerce")
     agg = agg.sort_values("arr_num")
+
 
     fig = px.bar(
         agg,
@@ -183,15 +206,20 @@ def graphique_prix_arrondissement(df):
     return styliser_fig(fig)
 
 
+
+
 def graphique_evolution_prix(df):
     """Courbe d'évolution du prix médian au m²."""
     if df.empty:
         return None
 
+
     ts = df.copy()
     ts["mois"] = ts["date_mutation"].dt.to_period("M").astype(str)
 
+
     agg = ts.groupby("mois").agg({"valeur_fonciere": "median", "prix_m2": "median"}).reset_index()
+
 
     fig = px.line(
         agg,
@@ -211,12 +239,16 @@ def graphique_evolution_prix(df):
     return styliser_fig(fig)
 
 
+
+
 def graphique_prix_m2(df):
     """Boîte à moustaches du prix/m² par arrondissement."""
     if df.empty:
         return None
 
+
     df_filtre = df[(df["prix_m2"] > 1000) & (df["prix_m2"] < 50000)].copy()
+
 
     fig = px.box(
         df_filtre,
@@ -234,16 +266,20 @@ def graphique_prix_m2(df):
     return styliser_fig(fig)
 
 
+
+
 def graphique_type_bien(df):
     """Prix médian par type de bien avec comptage en texte."""
     if df.empty:
         return None
+
 
     agg = df.groupby("type_local").agg({
         "valeur_fonciere": ["median", "count"],
         "prix_m2": "median",
     }).reset_index()
     agg.columns = ["type_local", "prix_median", "nb_ventes", "prix_m2_median"]
+
 
     fig = px.bar(
         agg,
@@ -265,12 +301,16 @@ def graphique_type_bien(df):
     return styliser_fig(fig)
 
 
+
+
 def graphique_nature_mutation(df):
     """Répartition des natures de mutation (camembert)."""
     if df.empty:
         return None
 
+
     agg = df.groupby("nature_mutation").size().reset_index(name="count")
+
 
     fig = px.pie(
         agg,
@@ -298,8 +338,11 @@ def graphique_nature_mutation(df):
     return styliser_fig(fig)
 
 
+
+
 def render_home(df, _filters):
     """Page d'accueil: vue d'ensemble avec design moderne."""
+
 
     # Hero section
     st.markdown(
@@ -336,15 +379,20 @@ def render_home(df, _filters):
         unsafe_allow_html=True
     )
 
+
     # KPIs améliorés
     afficher_kpis(df)
 
+
     st.markdown("<br>", unsafe_allow_html=True)
+
 
     # Fonctionnalités en cartes
     st.markdown("### Explorez les données")
 
+
     col1, col2, col3, col4 = st.columns(4)
+
 
     with col1:
         st.markdown(
@@ -363,6 +411,7 @@ def render_home(df, _filters):
             unsafe_allow_html=True
         )
 
+
     with col2:
         st.markdown(
             """
@@ -379,6 +428,7 @@ def render_home(df, _filters):
             """,
             unsafe_allow_html=True
         )
+
 
     with col3:
         st.markdown(
@@ -397,6 +447,7 @@ def render_home(df, _filters):
             unsafe_allow_html=True
         )
 
+
     with col4:
         st.markdown(
             """
@@ -414,7 +465,9 @@ def render_home(df, _filters):
             unsafe_allow_html=True
         )
 
+
     st.markdown("<br>", unsafe_allow_html=True)
+
 
     # Instructions stylisées
     st.markdown(
@@ -443,10 +496,13 @@ def render_home(df, _filters):
     )
 
 
+
+
 def render_transactions(df, filters):
     """Section Transactions: volume, grosses ventes et répartition."""
     if not _ensure_data(df):
         return
+
 
     # En-tête de section
     st.markdown(
@@ -460,12 +516,16 @@ def render_transactions(df, filters):
         unsafe_allow_html=True
     )
 
+
     # KPIs spécifiques aux transactions
     afficher_kpis(df)
 
+
     st.markdown("<br>", unsafe_allow_html=True)
 
+
     seuil_percentile = filters.get("seuil_percentile", 95)
+
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -477,15 +537,19 @@ def render_transactions(df, filters):
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
+
     fig = graphique_nature_mutation(df)
     if fig:
         st.plotly_chart(fig, use_container_width=True)
+
+
 
 
 def render_prix(df):
     """Section Prix: médian par arrondissement, évolution et distribution."""
     if not _ensure_data(df):
         return
+
 
     # En-tête de section
     st.markdown(
@@ -499,8 +563,10 @@ def render_prix(df):
         unsafe_allow_html=True
     )
 
+
     # KPIs prix
     col_k1, col_k2, col_k3, col_k4 = st.columns(4)
+
 
     with col_k1:
         prix_min = df["valeur_fonciere"].min()
@@ -517,6 +583,7 @@ def render_prix(df):
             unsafe_allow_html=True
         )
 
+
     with col_k2:
         prix_q1 = df["valeur_fonciere"].quantile(0.25)
         st.markdown(
@@ -531,6 +598,7 @@ def render_prix(df):
             """,
             unsafe_allow_html=True
         )
+
 
     with col_k3:
         prix_q3 = df["valeur_fonciere"].quantile(0.75)
@@ -547,6 +615,7 @@ def render_prix(df):
             unsafe_allow_html=True
         )
 
+
     with col_k4:
         prix_max = df["valeur_fonciere"].max()
         st.markdown(
@@ -562,7 +631,9 @@ def render_prix(df):
             unsafe_allow_html=True
         )
 
+
     st.markdown("<br>", unsafe_allow_html=True)
+
 
     col1, col2 = st.columns(2)
     with col1:
@@ -574,6 +645,7 @@ def render_prix(df):
         if fig:
             st.plotly_chart(fig, use_container_width=True)
 
+
     col3, col4 = st.columns([1, 1])
     with col3:
         fig = graphique_prix_m2(df)
@@ -583,3 +655,5 @@ def render_prix(df):
         fig = graphique_type_bien(df)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
+
+
