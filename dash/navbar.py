@@ -4,7 +4,7 @@ import streamlit as st
 
 
 def navbar(labels, key="nav"):
-    """Navbar horizontale simple qui renvoie le label selectionne."""
+    """navbar horizontale simple qui renvoie le label selectionne."""
     if key not in st.session_state:
         st.session_state[key] = labels[0]
 
@@ -13,7 +13,8 @@ def navbar(labels, key="nav"):
         activated = label == st.session_state[key]
         if col.button(label, use_container_width=True, key=f"{key}-{label}"):
             st.session_state[key] = label
-        # Highlight active tab
+            st.rerun()
+        # highlight active tab
         if activated:
             col.markdown(
                 (

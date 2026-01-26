@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-
+from dash import layout
 from dash.layout import PRIMARY_COLOR, SECONDARY_COLOR, styliser_fig
 
 
@@ -22,88 +22,28 @@ def _ensure_data(df):
 
 
 def afficher_kpis(df):
-    """Affiche les indicateurs clés avec design premium et animations."""
+    """affiche les indicateurs cles."""
     col1, col2, col3, col4, col5 = st.columns(5)
 
-
     with col1:
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center;
-                        box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4);
-                        transition: transform 0.2s;'>
-                <div style='font-size: 0.85rem; color: #e0f2fe; font-weight: 500; margin-bottom: 0.5rem;'>Transactions</div>
-                <div style='font-size: 2.2rem; font-weight: 800; color: white;'>{len(df):,}</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
+        st.metric("transactions", f"{len(df):,}")
 
     with col2:
         prix_moyen = df["valeur_fonciere"].mean()
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center;
-                        box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);'>
-                <div style='font-size: 0.85rem; color: #dbeafe; font-weight: 500; margin-bottom: 0.5rem;'>Prix moyen</div>
-                <div style='font-size: 2.2rem; font-weight: 800; color: white;'
-                >{prix_moyen/1e6:.2f}M€</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
+        st.metric("prix moyen", f"{prix_moyen/1e6:.2f}M€")
 
     with col3:
         prix_m2_median = df["prix_m2"].median()
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center;
-                        box-shadow: 0 4px 16px rgba(6, 182, 212, 0.4);'>
-                <div style='font-size: 0.85rem; color: #cffafe; font-weight: 500; margin-bottom: 0.5rem;'>Prix m² médian</div>
-                <div style='font-size: 2.2rem; font-weight: 800; color: white;'
-                >{prix_m2_median:,.0f}€</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
+        st.metric("prix m² médian", f"{prix_m2_median:,.0f}€")
 
     with col4:
         surface_moyenne = df["surface_reelle_bati"].mean()
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center;
-                        box-shadow: 0 4px 16px rgba(2, 132, 199, 0.4);'>
-                <div style='font-size: 0.85rem; color: #bae6fd; font-weight: 500; margin-bottom: 0.5rem;'>Surface moyenne</div>
-                <div style='font-size: 2.2rem; font-weight: 800; color: white;'
-                >{surface_moyenne:.0f}m²</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
+        st.metric("surface moyenne", f"{surface_moyenne:.0f}m²")
 
     with col5:
         seuil_grosse_vente = df["valeur_fonciere"].quantile(0.95)
         nb_grosses = len(df[df["valeur_fonciere"] >= seuil_grosse_vente])
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #0c4a6e 0%, #075985 100%);
-                        padding: 1.5rem; border-radius: 12px; text-align: center;
-                        box-shadow: 0 4px 16px rgba(12, 74, 110, 0.4);'>
-                <div style='font-size: 0.85rem; color: #bae6fd; font-weight: 500; margin-bottom: 0.5rem;'>Grosses ventes</div>
-                <div style='font-size: 2.2rem; font-weight: 800; color: white;'>{nb_grosses}</div>
-                <div style='font-size: 0.7rem; color: #bae6fd; margin-top: 0.3rem;'>Top 5%</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.metric("grosses ventes (top 5%)", nb_grosses)
 
 
 
@@ -340,320 +280,116 @@ def graphique_nature_mutation(df):
 
 
 
-def render_home(df, _filters):
-    """Page d'accueil: vue d'ensemble avec design moderne."""
+def render_home(df):
+    """page d'accueil: vue d'ensemble."""
 
+    # layout: filtres a gauche, contenu a droite
+    col_filtre, col_contenu = st.columns([1, 3])
 
-    # Hero section
-    st.markdown(
-        """
-        <div style='background: linear-gradient(135deg, #0c4a6e 0%, #0369a1 50%, #0ea5e9 100%);
-                    padding: 3rem 2rem; border-radius: 16px; margin-bottom: 2rem;
-                    box-shadow: 0 8px 32px rgba(14, 165, 233, 0.4); text-align: center;'>
-            <h1 style='color: white; font-size: 2.5rem; margin: 0; font-weight: 800;
-                       text-shadow: 0 2px 8px rgba(0,0,0,0.3);'>
-                Bienvenue sur DVF Paris Analytics
-            </h1>
-            <p style='color: #e0f2fe; font-size: 1.2rem; margin-top: 1rem; font-weight: 400;'>
-                Analyse intelligente des transactions immobilières parisiennes
-            </p>
-            <div style='margin-top: 1.5rem;'>
-                <span style='background: rgba(255,255,255,0.2); padding: 0.5rem 1rem;
-                            border-radius: 20px;
-                            color: white; font-size: 0.9rem; margin: 0 0.5rem;'>
-                    API DVF+ Cerema
-                </span>
-                <span style='background: rgba(255,255,255,0.2); padding: 0.5rem 1rem;
-                            border-radius: 20px; color: white; font-size: 0.9rem;
-                            margin: 0 0.5rem;'>
-                    Elasticsearch
-                </span>
-                <span style='background: rgba(255,255,255,0.2); padding: 0.5rem 1rem;
-                            border-radius: 20px; color: white;
-                            font-size: 0.9rem; margin: 0 0.5rem;'>
-                    20 Arrondissements
-                </span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    with col_filtre:
+        df_filtre = layout.render_filters_sidebar(df, show_percentile=False)
 
+    with col_contenu:
+        st.markdown("## vue d'ensemble")
+        st.markdown("---")
 
-    # KPIs améliorés
-    afficher_kpis(df)
-
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-
-    # Fonctionnalités en cartes
-    st.markdown("### Explorez les données")
-
-
-    col1, col2, col3, col4 = st.columns(4)
-
-
-    with col1:
-        st.markdown(
-            """
-            <div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
-                        padding: 1.5rem; border-radius: 12px; border: 1px solid #0ea5e9;
-                        box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2); height: 180px;'>
-                <div style='color: #0ea5e9; font-weight: 800;
-                font-size: 1.3rem; margin-bottom: 0.3rem;'
-                >Transactions</div>
-                <div style='color: #94a3b8; font-size: 0.85rem; margin-top: 0.5rem;'>
-                    Volume mensuel, grosses ventes et tendances temporelles
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-    with col2:
-        st.markdown(
-            """
-            <div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
-                        padding: 1.5rem; border-radius: 12px; border: 1px solid #06b6d4;
-                        box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2); height: 180px;'>
-                <div style='color: #0ea5e9; font-weight: 800;
-                font-size: 1.3rem; margin-bottom: 0.3rem;'
-                >Analyse Prix</div>
-                <div style='color: #94a3b8; font-size: 0.85rem; margin-top: 0.5rem;'>
-                    Médianes, évolution et distribution par arrondissement
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-    with col3:
-        st.markdown(
-            """
-            <div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
-                        padding: 1.5rem; border-radius: 12px; border: 1px solid #2563eb;
-                        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2); height: 180px;'>
-                <div style='color: #0ea5e9; font-weight: 800;
-                font-size: 1.3rem; margin-bottom: 0.3rem;'
-                >Carte Interactive</div>
-                <div style='color: #94a3b8; font-size: 0.85rem; margin-top: 0.5rem;'>
-                    Visualisation géographique et choroplèthe
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-    with col4:
-        st.markdown(
-            """
-            <div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
-                        padding: 1.5rem; border-radius: 12px; border: 1px solid #0891b2;
-                        box-shadow: 0 4px 12px rgba(8, 145, 178, 0.2); height: 180px;'>
-                <div style='color: #0ea5e9; font-weight: 800;
-                font-size: 1.3rem; margin-bottom: 0.3rem;'
-                >Recherche IA</div>
-                <div style='color: #94a3b8; font-size: 0.85rem; margin-top: 0.5rem;'>
-                    Moteur Elasticsearch avec fuzzy matching
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-
-    # Instructions stylisées
-    st.markdown(
-        """
-        <div style='background: linear-gradient(90deg, #0f2f4f 0%, #1a3a52 100%);
-                    padding: 1.5rem; border-radius: 12px; margin-top: 1.5rem;
-                    border-left: 4px solid #0ea5e9;'>
-            <div style='color: #0ea5e9; font-weight: 700; font-size: 1.2rem; margin-bottom: 1rem;'
-            > Guide rapide</div>
-            <div style='color: #cbd5e1;'>
-                <div style='margin-bottom: 0.5rem;'>
-                <strong>Navigation:</strong>
-                Utilisez les onglets ci-dessus pour explorer les différentes vues</div>
-                <div style='margin-bottom: 0.5rem;'>
-                <strong>Filtres:</strong>
-                Sidebar à gauche pour affiner par date, arrondissement, type et prix</div>
-                <div style='margin-bottom: 0.5rem;'>
-                <strong>Recherche:</strong>
-                Trouvez des transactions spécifiques avec le moteur Elasticsearch</div>
-                <div> <strong>Visualisations:</strong>
-                7 graphiques interactifs + cartes géolocalisées</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+        # kpis
+        afficher_kpis(df_filtre)
 
 
 
 
-def render_transactions(df, filters):
-    """Section Transactions: volume, grosses ventes et répartition."""
+def render_transactions(df):
+    """section transactions: volume, grosses ventes et repartition."""
     if not _ensure_data(df):
         return
 
+    # layout: filtres a gauche, contenu a droite
+    col_filtre, col_contenu = st.columns([1, 3])
 
-    # En-tête de section
-    st.markdown(
-        """
-        <div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
-                    padding: 1.2rem; border-radius: 12px; margin-bottom: 1.5rem;
-                    border: 1px solid #0ea5e9;'>
-            <h2 style='color: #0ea5e9; margin: 0;'> Analyse des Transactions</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    with col_filtre:
+        df_filtre = layout.render_filters_sidebar(df, show_percentile=True)
 
+    with col_contenu:
+        st.markdown("## analyse des transactions")
+        st.markdown("---")
 
-    # KPIs spécifiques aux transactions
-    afficher_kpis(df)
+        # kpis specifiques aux transactions
+        afficher_kpis(df_filtre)
 
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            fig = graphique_timeline(df_filtre)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            fig = graphique_grosses_ventes(df_filtre, 95)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
 
-
-    seuil_percentile = filters.get("seuil_percentile", 95)
-
-
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        fig = graphique_timeline(df)
+        fig = graphique_nature_mutation(df_filtre)
         if fig:
             st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        fig = graphique_grosses_ventes(df, seuil_percentile)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-
-
-    fig = graphique_nature_mutation(df)
-    if fig:
-        st.plotly_chart(fig, use_container_width=True)
 
 
 
 
 def render_prix(df):
-    """Section Prix: médian par arrondissement, évolution et distribution."""
+    """section prix: median par arrondissement, evolution et distribution."""
     if not _ensure_data(df):
         return
 
+    # layout: filtres a gauche, contenu a droite
+    col_filtre, col_contenu = st.columns([1, 3])
 
-    # En-tête de section
-    st.markdown(
-        """
-        <div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
-                    padding: 1.2rem; border-radius: 12px; margin-bottom: 1.5rem;
-                    border: 1px solid #0ea5e9;'>
-            <h2 style='color: #0ea5e9; margin: 0;'> Analyse des Prix</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    with col_filtre:
+        df_filtre = layout.render_filters_sidebar(df, show_percentile=False)
 
+    with col_contenu:
+        st.markdown("## analyse des prix")
+        st.markdown("---")
 
-    # KPIs prix
-    col_k1, col_k2, col_k3, col_k4 = st.columns(4)
+        # kpis prix
+        col_k1, col_k2, col_k3, col_k4 = st.columns(4)
 
+        with col_k1:
+            prix_min = df_filtre["valeur_fonciere"].min()
+            st.metric("prix min", f"{prix_min/1e6:.2f}M€")
 
-    with col_k1:
-        prix_min = df["valeur_fonciere"].min()
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-                        padding: 1.2rem; border-radius: 10px; text-align: center;
-                        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);'>
-                <div style='font-size: 0.75rem; color: #d1fae5; margin-bottom: 0.3rem;'>MIN</div>
-                <div style='font-size: 1.5rem; font-weight: 700; color: white;'
-                >{prix_min/1e6:.2f}M€</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        with col_k2:
+            prix_q1 = df_filtre["valeur_fonciere"].quantile(0.25)
+            st.metric("Q1 (25%)", f"{prix_q1/1e6:.2f}M€")
 
+        with col_k3:
+            prix_q3 = df_filtre["valeur_fonciere"].quantile(0.75)
+            st.metric("Q3 (75%)", f"{prix_q3/1e6:.2f}M€")
 
-    with col_k2:
-        prix_q1 = df["valeur_fonciere"].quantile(0.25)
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%);
-                        padding: 1.2rem; border-radius: 10px; text-align: center;
-                        box-shadow: 0 4px 12px rgba(8, 145, 178, 0.3);'>
-                <div style='font-size: 0.75rem; color: #cffafe; margin-bottom: 0.3rem;'>Q1 (25%)</div>
-                <div style='font-size: 1.5rem; font-weight: 700; color: white;'
-                >{prix_q1/1e6:.2f}M€</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        with col_k4:
+            prix_max = df_filtre["valeur_fonciere"].max()
+            st.metric("prix max", f"{prix_max/1e6:.2f}M€")
 
+        st.markdown("<br>", unsafe_allow_html=True)
 
-    with col_k3:
-        prix_q3 = df["valeur_fonciere"].quantile(0.75)
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
-                        padding: 1.2rem; border-radius: 10px; text-align: center;
-                        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);'>
-                <div style='font-size: 0.75rem; color: #dbeafe; margin-bottom: 0.3rem;'>Q3 (75%)</div>
-                <div style='font-size: 1.5rem; font-weight: 700; color: white;'
-                >{prix_q3/1e6:.2f}M€</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = graphique_prix_arrondissement(df_filtre)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+        with col2:
+            fig = graphique_evolution_prix(df_filtre)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
 
-
-    with col_k4:
-        prix_max = df["valeur_fonciere"].max()
-        st.markdown(
-            f"""
-            <div style='background: linear-gradient(135deg, #6d28d9 0%, #8b5cf6 100%);
-                        padding: 1.2rem; border-radius: 10px; text-align: center;
-                        box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);'>
-                <div style='font-size: 0.75rem; color: #ede9fe; margin-bottom: 0.3rem;'>MAX</div>
-                <div style='font-size: 1.5rem; font-weight: 700; color: white;'
-                >{prix_max/1e6:.2f}M€</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = graphique_prix_arrondissement(df)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        fig = graphique_evolution_prix(df)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-
-
-    col3, col4 = st.columns([1, 1])
-    with col3:
-        fig = graphique_prix_m2(df)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-    with col4:
-        fig = graphique_type_bien(df)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
+        col3, col4 = st.columns([1, 1])
+        with col3:
+            fig = graphique_prix_m2(df_filtre)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
+        with col4:
+            fig = graphique_type_bien(df_filtre)
+            if fig:
+                st.plotly_chart(fig, use_container_width=True)
 
 

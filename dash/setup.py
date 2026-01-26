@@ -22,24 +22,7 @@ def render_setup(df, df_filtre):
 
     st.progress(min(max(couverture, 0), 1))
 
-    st.subheader("Check rapide")
-    checks = {
-        "Colonnes principales": all(
-            col in df.columns
-            for col in ["date_mutation", "valeur_fonciere", "prix_m2"]
-        ),
-        "Coordonnees disponibles": (
-            df[["latitude", "longitude"]].dropna().shape[0] > 0
-            if not df.empty
-            else False
-        ),
-        "Donnees chargees": not df.empty,
-    }
-    for label, ok in checks.items():
-        status = "OK" if ok else "Attention"
-        st.write(f"{status} - {label}")
-
-    st.subheader("Conseils")
+    st.subheader("conseils")
     st.markdown(
         """
         - Lancez `docker-compose up -d` pour demarrer Postgres avant d'ouvrir le dashboard.

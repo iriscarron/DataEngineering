@@ -155,58 +155,63 @@ def charger_donnees():
         return pd.DataFrame()
 
 
-def render_filters(df):
-    """Affiche les filtres et renvoie le dataframe filtre + params."""
+def render_filters_sidebar(df, show_percentile=False):
+    """affiche les filtres dans une sidebar et renvoie le dataframe filtre."""
     if df.empty:
-        return df, {"seuil_percentile": 95}
+        return df
 
-    def _select_multi(options, label):
-        choice = st.selectbox(label, ["Tous"] + list(options), index=0)
-        return list(options) if choice == "Tous" else [choice]
+    st.markdown("## filtres")
+    st.markdown("---")
 
-    with st.sidebar:
-        st.header("Filtres")
-        date_range = st.date_input(
-            "Periode",
-            value=(df["date_mutation"].min().date(), df["date_mutation"].max().date()),
-            min_value=df["date_mutation"].min().date(),
-            max_value=df["date_mutation"].max().date(),
-        )
+    # periode
+    date_range = st.date_input(
+        "période",
+        value=(df["date_mutation"].min().date(), df["date_mutation"].max().date()),
+        min_value=df["date_mutation"].min().date(),
+        max_value=df["date_mutation"].max().date(),
+    )
 
-        arrondissements = sorted(
-            df["arrondissement"].dropna().unique(),
-            key=lambda x: int(x) if str(x).isdigit() else 0,
-        )
-        arr_selected = _select_multi(arrondissements, "Arrondissements")
+    # arrondissements
+    arrondissements = sorted(
+        df["arrondissement"].dropna().unique(),
+        key=lambda x: int(x) if str(x).isdigit() else 0,
+    )
+    arr_selected = st.multiselect("arrondissements", arrondissements, default=arrondissements)
 
-        types = sorted(df["type_local"].dropna().unique())
-        types_selected = _select_multi(types, "Type de bien")
+    # type de bien
+    types = sorted(df["type_local"].dropna().unique())
+    types_selected = st.multiselect("type de bien", types, default=types)
 
-        if "nature_mutation" in df.columns:
-            natures = sorted(df["nature_mutation"].dropna().unique())
-            natures_selected = _select_multi(natures, "Type de vente")
-        else:
-            natures_selected = []
+    # type de vente
+    if "nature_mutation" in df.columns:
+        natures = sorted(df["nature_mutation"].dropna().unique())
+        natures_selected = st.multiselect("type de vente", natures, default=natures)
+    else:
+        natures_selected = []
 
-        st.subheader("Filtres prix")
-        max_valeur = int(df["valeur_fonciere"].max()) if not df.empty else 1
-        prix_min, prix_max = st.slider(
-            "Plage de prix (euros)",
-            min_value=0,
-            max_value=max(max_valeur, 1),
-            value=(
-                0,
-                max(int(df["valeur_fonciere"].quantile(0.99)) if not df.empty else max_valeur, 1),
-            ),
-        )
+    # prix
+    max_valeur = int(df["valeur_fonciere"].max()) if not df.empty else 1
+    prix_min, prix_max = st.slider(
+        "plage de prix (€)",
+        min_value=0,
+        max_value=max(max_valeur, 1),
+        value=(
+            0,
+            max(int(df["valeur_fonciere"].quantile(0.99)) if not df.empty else max_valeur, 1),
+        ),
+    )
 
+    # seuil grosses ventes (optionnel)
+    seuil_percentile = 95
+    if show_percentile:
         seuil_percentile = st.slider(
-            "Seuil grosses ventes (percentile)",
+            "seuil grosses ventes (%)",
             min_value=80,
             max_value=99,
             value=95,
         )
 
+    # application des filtres
     if len(date_range) == 2:
         mask = (
             (df["date_mutation"].dt.date >= date_range[0])
@@ -222,12 +227,6 @@ def render_filters(df):
     else:
         df_filtre = df.copy()
 
-    return df_filtre, {
-        "date_range": date_range,
-        "arrondissements": arr_selected,
-        "types": types_selected,
-        "natures": natures_selected,
-        "prix_min": prix_min,
-        "prix_max": prix_max,
-        "seuil_percentile": seuil_percentile,
-    }
+    st.markdown(f"**{len(df_filtre):,}** transactions affichées")
+
+    return df_filtre
