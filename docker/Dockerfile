@@ -6,7 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential libpq-dev dos2unix \
+    && apt-get install -y --no-install-recommends build-essential libpq-dev dos2unix ca-certificates \
+    && apt-get install -y --no-install-recommends python3-certifi \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./

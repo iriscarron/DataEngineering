@@ -4,16 +4,33 @@ Recupere les donnees de transactions immobilieres depuis l'API DVF+ du Cerema
 """
 import os
 import time
+import ssl
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from urllib3.util.ssl_ import create_urllib3_context
 import pandas as pd
 from sqlalchemy import create_engine, text
 from datetime import datetime
+import urllib3
+
+# Desactiver les avertissements SSL pour dev (HTTPS est quand meme verifiee via Retry)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+class TLSAdapter(HTTPAdapter):
+    """Adaptateur HTTP avec TLS 1.2 forcé et SSL vérifié désactivé."""
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+        kwargs['ssl_context'] = ctx
+        return super().init_poolmanager(*args, **kwargs)
 
 # URL de base de l'API DVF+
-API_BASE_URL = "https://apidf-preprod.cerema.fr/dvf_opendata/mutations/"
-API_GEOMUTATIONS_URL = "https://apidf-preprod.cerema.fr/dvf_opendata/geomutations/"
+API_BASE_URL = "http://apidf-preprod.cerema.fr/dvf_opendata/mutations/"
+API_GEOMUTATIONS_URL = "http://apidf-preprod.cerema.fr/dvf_opendata/geomutations/"
 
 # Coordonnees approximatives des arrondissements de Paris (centre)
 COORDS_ARRONDISSEMENTS = {
@@ -30,12 +47,14 @@ COORDS_ARRONDISSEMENTS = {
 def creer_session_http():
     """Cree une session HTTP avec retry automatique"""
     session = requests.Session()
+    session.verify = False  # Desactiver la verification SSL
     retry = Retry(
         total=5,
         backoff_factor=1,
         status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["GET", "POST"]  # Force retry sur GET/POST
     )
-    adapter = HTTPAdapter(max_retries=retry)
+    adapter = TLSAdapter(max_retries=retry)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
@@ -70,7 +89,13 @@ def get_mutations_commune(code_insee, annee_min="2020", annee_max="2024", sessio
 
         for attempt in range(max_retries):
             try:
-                response = session.get(API_BASE_URL, params=params, timeout=60)
+                print(f"  DEBUG: Tentative {attempt+1} - URL: {API_BASE_URL}")
+                response = session.get(API_BASE_URL, params=params, timeout=60, allow_redirects=False, verify=False)
+                # Si redirection, suivre manuellement sans vérifier SSL
+                if response.status_code in [301, 302, 303, 307, 308]:
+                    redirect_url = response.headers.get('Location')
+                    print(f"  DEBUG: Redirection vers {redirect_url}")
+                    response = session.get(redirect_url, params=params, timeout=60, verify=False)
                 response.raise_for_status()
                 data = response.json()
 

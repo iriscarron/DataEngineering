@@ -48,6 +48,9 @@ services:
       ELASTICSEARCH_URL: http://elasticsearch:9200
     ports:
       - "8501:8501"
+    volumes:
+      # Monte le code hote pour rechargement auto en dev (ne pas monter un venv local)
+      - .:/app
 
 volumes:
   db_data:
