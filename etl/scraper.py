@@ -6,6 +6,10 @@ import os
 import time
 import ssl
 import requests
+import importlib
+import subprocess
+import sys
+from urllib.parse import urlparse
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib3.util.ssl_ import create_urllib3_context
@@ -63,7 +67,36 @@ def creer_session_http():
 PARIS_INSEE_CODES = [f"751{str(i).zfill(2)}" for i in range(1, 21)]
 
 # Connexion base de donnees
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dvf:dvf@localhost:5432/dvf")
+def _normalize_db_url(url: str) -> str:
+    parsed = urlparse(url)
+    host = parsed.hostname or ""
+    if host == "localhost":
+        url = url.replace("localhost", "127.0.0.1")
+    if "?" in url:
+        if "connect_timeout" not in url:
+            url += "&connect_timeout=5"
+    else:
+        url += "?connect_timeout=5"
+    return url
+
+
+DATABASE_URL = _normalize_db_url(os.getenv("DATABASE_URL", "postgresql://dvf:dvf@127.0.0.1:5432/dvf"))
+
+
+def ensure_db_driver():
+    """S'assure que psycopg2 est dispo en local (dans le conteneur il est déjà installé)."""
+    try:
+        importlib.import_module("psycopg2")
+        return
+    except ModuleNotFoundError:
+        print("psycopg2 absent, tentative d'installation (psycopg2-binary)...")
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "psycopg2-binary"], check=True)
+        importlib.import_module("psycopg2")
+        print("psycopg2-binary install")
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"Echec d'installation de psycopg2-binary: {exc}")
+        sys.exit(1)
 
 
 def get_mutations_commune(code_insee, annee_min="2020", annee_max="2024", session=None):
@@ -471,6 +504,8 @@ def run_scraper(annee_min="2020", annee_max="2024", vider_avant=True):
     """
     Fonction principale pour executer le pipeline ETL complet (sans geometries)
     """
+    ensure_db_driver()
+
     print("=" * 60)
     print("DVF+ Paris Scraper")
     print("=" * 60)
