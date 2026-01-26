@@ -155,6 +155,46 @@ def charger_donnees():
         return pd.DataFrame()
 
 
+@st.cache_data(show_spinner=False)
+def charger_batiments_avec_transactions(df_transactions):
+    """Charge les batiments avec leurs transactions associees."""
+    try:
+        engine = create_engine(DATABASE_URL)
+
+        # Créer une table temporaire avec les transactions filtrées
+        # On va joindre les bâtiments avec les transactions par proximité
+        query = """
+            WITH trans AS (
+                SELECT
+                    latitude, longitude, valeur_fonciere, prix_m2,
+                    type_local, arrondissement, date_mutation,
+                    ST_SetSRID(ST_MakePoint(longitude, latitude), 4326) as geom_point
+                FROM transactions
+                WHERE latitude IS NOT NULL
+                AND longitude IS NOT NULL
+                AND valeur_fonciere IS NOT NULL
+            )
+            SELECT
+                b.id as batiment_id,
+                ST_AsGeoJSON(b.geom) as geometry,
+                b.commune,
+                COUNT(t.latitude) as nb_transactions,
+                AVG(t.valeur_fonciere) as prix_moyen,
+                AVG(t.prix_m2) as prix_m2_moyen,
+                MAX(t.date_mutation) as derniere_transaction
+            FROM batiments b
+            LEFT JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
+            GROUP BY b.id, b.geom, b.commune
+            HAVING COUNT(t.latitude) > 0
+        """
+
+        df = pd.read_sql(query, engine)
+        return df
+    except Exception as e:  # pylint: disable=broad-except
+        st.error(f"Erreur de chargement des bâtiments: {e}")
+        return pd.DataFrame()
+
+
 def render_filters_sidebar(df, show_percentile=False):
     """affiche les filtres dans une sidebar et renvoie le dataframe filtre."""
     if df.empty:
@@ -176,30 +216,43 @@ def render_filters_sidebar(df, show_percentile=False):
         df["arrondissement"].dropna().unique(),
         key=lambda x: int(x) if str(x).isdigit() else 0,
     )
-    arr_selected = st.multiselect("arrondissements", arrondissements, default=arrondissements)
+    arr_options = ["tous"] + list(arrondissements)
+    arr_selected = st.selectbox("arrondissement", arr_options, index=0)
 
     # type de bien
     types = sorted(df["type_local"].dropna().unique())
-    types_selected = st.multiselect("type de bien", types, default=types)
+    types_options = ["tous"] + list(types)
+    type_selected = st.selectbox("type de bien", types_options, index=0)
 
     # type de vente
     if "nature_mutation" in df.columns:
         natures = sorted(df["nature_mutation"].dropna().unique())
-        natures_selected = st.multiselect("type de vente", natures, default=natures)
+        natures_options = ["tous"] + list(natures)
+        nature_selected = st.selectbox("type de vente", natures_options, index=0)
     else:
-        natures_selected = []
+        nature_selected = "tous"
 
-    # prix
-    max_valeur = int(df["valeur_fonciere"].max()) if not df.empty else 1
-    prix_min, prix_max = st.slider(
-        "plage de prix (€)",
-        min_value=0,
-        max_value=max(max_valeur, 1),
-        value=(
-            0,
-            max(int(df["valeur_fonciere"].quantile(0.99)) if not df.empty else max_valeur, 1),
-        ),
-    )
+    # prix avec champs de saisie
+    st.markdown("**plage de prix (€)**")
+    col_prix1, col_prix2 = st.columns(2)
+    with col_prix1:
+        prix_min = st.number_input(
+            "de",
+            min_value=0,
+            max_value=int(df["valeur_fonciere"].max()) if not df.empty else 1000000,
+            value=0,
+            step=10000,
+            format="%d"
+        )
+    with col_prix2:
+        prix_max = st.number_input(
+            "à",
+            min_value=0,
+            max_value=int(df["valeur_fonciere"].max()) if not df.empty else 10000000,
+            value=int(df["valeur_fonciere"].quantile(0.99)) if not df.empty else 5000000,
+            step=10000,
+            format="%d"
+        )
 
     # seuil grosses ventes (optionnel)
     seuil_percentile = 95
@@ -216,13 +269,22 @@ def render_filters_sidebar(df, show_percentile=False):
         mask = (
             (df["date_mutation"].dt.date >= date_range[0])
             & (df["date_mutation"].dt.date <= date_range[1])
-            & (df["arrondissement"].isin(arr_selected))
-            & (df["type_local"].isin(types_selected))
             & (df["valeur_fonciere"] >= prix_min)
             & (df["valeur_fonciere"] <= prix_max)
         )
-        if natures_selected and "nature_mutation" in df.columns:
-            mask = mask & (df["nature_mutation"].isin(natures_selected))
+
+        # Filtre arrondissement
+        if arr_selected != "tous":
+            mask = mask & (df["arrondissement"] == arr_selected)
+
+        # Filtre type de bien
+        if type_selected != "tous":
+            mask = mask & (df["type_local"] == type_selected)
+
+        # Filtre type de vente
+        if nature_selected != "tous" and "nature_mutation" in df.columns:
+            mask = mask & (df["nature_mutation"] == nature_selected)
+
         df_filtre = df[mask].copy()
     else:
         df_filtre = df.copy()

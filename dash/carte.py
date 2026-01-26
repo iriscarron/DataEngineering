@@ -1,5 +1,7 @@
-"""carte interactive des transactions geolocalisees."""
+"""carte interactive des transactions geolocalisees avec batiments cadastraux."""
+import json
 import streamlit as st
+import plotly.graph_objects as go
 import plotly.express as px
 
 from dash import layout
@@ -7,7 +9,7 @@ from dash.layout import styliser_fig
 
 
 def render_carte(df):
-    """carte des transactions geolocalisees."""
+    """carte des transactions avec polygones des batiments."""
     if df.empty:
         st.info("aucune donnée pour afficher la carte.")
         return
@@ -27,64 +29,131 @@ def render_carte(df):
         st.markdown(f"## carte - {len(df_map):,} transactions")
         st.markdown("---")
 
-        # options d'affichage
+        # option d'affichage
         col_opt1, col_opt2 = st.columns(2)
         with col_opt1:
-            color_by_display = st.selectbox(
-                "colorer par",
-                ["arrondissement", "prix au m²", "type de bien", "type de vente"],
-                index=1
+            mode_affichage = st.selectbox(
+                "mode d'affichage",
+                ["bâtiments (polygones)", "points de transaction"],
+                index=0
             )
+        with col_opt2:
+            if mode_affichage == "bâtiments (polygones)":
+                color_by_display = st.selectbox(
+                    "colorer par",
+                    ["prix au m² moyen"],
+                    index=0
+                )
+            else:
+                color_by_display = st.selectbox(
+                    "colorer par",
+                    ["arrondissement", "prix au m²", "type de bien", "type de vente"],
+                    index=1
+                )
+
+        if mode_affichage == "bâtiments (polygones)":
+            # Charger les bâtiments avec transactions
+            with st.spinner("chargement des bâtiments..."):
+                df_batiments = layout.charger_batiments_avec_transactions(df_map)
+
+            if df_batiments.empty:
+                st.warning("aucun bâtiment avec transaction trouvé.")
+                return
+
+            st.info(f"{len(df_batiments):,} bâtiments avec {len(df_map):,} transactions")
+
+            # Créer le GeoJSON des bâtiments
+            features = []
+            for idx, row in df_batiments.iterrows():
+                geom = json.loads(row["geometry"])
+                features.append({
+                    "type": "Feature",
+                    "id": str(idx),
+                    "geometry": geom,
+                    "properties": {
+                        "prix_m2_moyen": float(row["prix_m2_moyen"]) if row["prix_m2_moyen"] else 0,
+                        "nb_transactions": int(row["nb_transactions"]),
+                        "prix_moyen": float(row["prix_moyen"]) if row["prix_moyen"] else 0,
+                    }
+                })
+
+            geojson = {
+                "type": "FeatureCollection",
+                "features": features
+            }
+
+            # Créer la figure avec Choroplethmapbox
+            fig = go.Figure(go.Choroplethmapbox(
+                geojson=geojson,
+                locations=df_batiments.index.astype(str),
+                z=df_batiments["prix_m2_moyen"],
+                colorscale="Viridis",
+                marker_opacity=0.7,
+                marker_line_width=0.5,
+                marker_line_color="white",
+                text=df_batiments.apply(
+                    lambda x: f"{x['nb_transactions']} transaction(s)<br>Prix m²: {x['prix_m2_moyen']:,.0f}€<br>Prix moyen: {x['prix_moyen']/1e6:.2f}M€",
+                    axis=1
+                ),
+                hovertemplate='<b>Bâtiment</b><br>%{text}<extra></extra>',
+                colorbar=dict(
+                    title="Prix m²<br>(€)",
+                    titleside="right",
+                    tickformat=",",
+                    len=0.7,
+                )
+            ))
+
+            # Centrer sur Paris
+            fig.update_layout(
+                mapbox=dict(
+                    style="carto-positron",
+                    center=dict(lat=48.856, lon=2.352),
+                    zoom=11.5
+                ),
+                title=f"{len(df_batiments):,} bâtiments avec transactions à Paris",
+                height=700,
+            )
+
+            styliser_fig(fig)
+            st.plotly_chart(fig, use_container_width=True)
+
+        else:
+            # Mode points (ancien affichage)
             color_by = {
                 "arrondissement": "arrondissement",
                 "prix au m²": "prix_m2",
                 "type de bien": "type_local",
                 "type de vente": "nature_mutation"
             }[color_by_display]
-        with col_opt2:
-            size_by_display = st.selectbox(
-                "taille par",
-                ["surface", "prix", "uniforme"],
-                index=0
-            )
-            size_by = {
-                "surface": "surface_reelle_bati",
-                "prix": "valeur_fonciere",
-                "uniforme": "uniforme"
-            }[size_by_display]
-        # carte scatter mapbox
-        kwargs = {
-            "data_frame": df_map,
-            "lat": "latitude",
-            "lon": "longitude",
-            "hover_name": "type_local",
-            "hover_data": {
-                "valeur_fonciere": ":,.0f",
-                "prix_m2": ":,.0f",
-                "surface_reelle_bati": ":.0f",
-                "arrondissement": True,
-                "date_mutation": True,
-                "latitude": False,
-                "longitude": False
-            },
-            "zoom": 11.5,
-            "title": f"{len(df_map):,} transactions géolocalisées à paris",
-            "height": 700,
-        }
-        if color_by == "prix_m2":
-            kwargs["color"] = "prix_m2"
-            kwargs["color_continuous_scale"] = "Viridis"
-        else:
-            kwargs["color"] = color_by
-            kwargs["color_discrete_sequence"] = px.colors.sequential.PuBuGn
-        if size_by != "uniforme":
-            kwargs["size"] = size_by
-        fig = px.scatter_mapbox(**kwargs)
-        fig.update_layout(mapbox_style="carto-positron")
-        # style des marqueurs selon le choix
-        if size_by == "uniforme":
+
+            kwargs = {
+                "data_frame": df_map,
+                "lat": "latitude",
+                "lon": "longitude",
+                "hover_name": "type_local",
+                "hover_data": {
+                    "valeur_fonciere": ":,.0f",
+                    "prix_m2": ":,.0f",
+                    "surface_reelle_bati": ":.0f",
+                    "arrondissement": True,
+                    "date_mutation": True,
+                    "latitude": False,
+                    "longitude": False
+                },
+                "zoom": 11.5,
+                "title": f"{len(df_map):,} transactions géolocalisées à paris",
+                "height": 700,
+            }
+            if color_by == "prix_m2":
+                kwargs["color"] = "prix_m2"
+                kwargs["color_continuous_scale"] = "Viridis"
+            else:
+                kwargs["color"] = color_by
+                kwargs["color_discrete_sequence"] = px.colors.sequential.PuBuGn
+
+            fig = px.scatter_mapbox(**kwargs)
+            fig.update_layout(mapbox_style="carto-positron")
             fig.update_traces(marker={"size": 8, "opacity": 0.6})
-        else:
-            fig.update_traces(marker={"opacity": 0.7})
-        styliser_fig(fig)
-        st.plotly_chart(fig, use_container_width=True)
+            styliser_fig(fig)
+            st.plotly_chart(fig, use_container_width=True)
