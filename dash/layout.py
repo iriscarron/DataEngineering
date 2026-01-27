@@ -205,6 +205,7 @@ def charger_batiments_avec_transactions(df_transactions):
         engine = create_engine(DATABASE_URL)
 
         # Charger tous les bâtiments avec transactions (pas de limite)
+        # Distance de 0.001 degrés (~110m à Paris) pour matcher plus de bâtiments
         query = """
             WITH trans AS (
                 SELECT
@@ -225,7 +226,7 @@ def charger_batiments_avec_transactions(df_transactions):
                 AVG(t.prix_m2) as prix_m2_moyen,
                 MAX(t.date_mutation) as derniere_transaction
             FROM batiments b
-            INNER JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
+            INNER JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.001)
             WHERE b.geom IS NOT NULL
             GROUP BY b.id, b.geom, b.commune
             HAVING COUNT(t.latitude) > 0
