@@ -4,9 +4,13 @@ import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
+from sqlalchemy import create_engine, text
+import os
 
 from dash import layout
 from dash.layout import styliser_fig
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dvf:dvf@localhost:5432/dvf")
 
 
 def render_carte(df):
@@ -19,7 +23,7 @@ def render_carte(df):
     col_filtre, col_contenu = st.columns([1, 3])
 
     with col_filtre:
-        df_filtre = layout.render_filters_sidebar(df, show_percentile=False)
+        df_filtre = layout.render_filters_sidebar(df, show_percentile=False, show_date_range=False)
 
     with col_contenu:
         df_map = df_filtre.dropna(subset=["latitude", "longitude"])
@@ -116,7 +120,7 @@ def render_carte(df):
                 st.warning("Aucun bâtiment avec transaction trouvé.")
                 return
 
-            st.info(f"🏘️ {len(df_batiments):,} bâtiments avec {len(df_map):,} transactions")
+            st.info(f"{len(df_batiments):,} bâtiments avec {len(df_map):,} transactions")
 
             # Créer le GeoJSON des bâtiments
             features = []
@@ -181,7 +185,7 @@ def render_carte(df):
             )
 
             styliser_fig(fig)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key="map_batiments")
 
         else:  # niveau_detail == "Points"
             # Vue par points de transaction

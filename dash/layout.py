@@ -32,116 +32,53 @@ def configure_page():
 
 
 def apply_theme():
-    """Applique le theming global: tons clairs, fond beige partout."""
+    """Applique les styles personnalisés complémentaires au theme config.toml."""
     st.markdown(
         """
         <style>
-        @import url(
-        'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        :root {{
-            --primary:#2c5f2d;
-            --accent:#97bc62;
-            --muted:#f5f1e8;
-            --text:#2d3436;
-        }}
-        /* FOND BEIGE PARTOUT */
-        html, body {{
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        /* Police personnalisée */
+        html, body, [class*="css"] {{
             font-family: 'Inter', sans-serif;
-            background: #f5f1e8 !important;
         }}
-        [data-testid="stAppViewContainer"],
-        [data-testid="stAppViewContainer"] > div,
-        [data-testid="stMainBlockContainer"],
-        .main,
-        .block-container {{
-            background: #f5f1e8 !important;
-            color: #2d3436 !important;
-        }}
-        /* Sidebar */
-        [data-testid="stSidebar"] {{
-            background: #faf8f3 !important;
-            color: #2d3436;
-            border-right: 1px solid #e0ddd5;
-        }}
-        [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2,
-        [data-testid="stSidebar"] h3, [data-testid="stSidebar"] label {{
-            color: #2d3436 !important;
-            font-weight: 600;
-        }}
-        /* Boutons de filtre */
-        [data-testid="stSidebar"] button {{
-            background: #2c5f2d !important;
-            color: #ffffff !important;
-            border: none !important;
-            border-radius: 6px !important;
-            font-weight: 500 !important;
-        }}
-        [data-testid="stSidebar"] button:hover {{
-            background: #3d7a3e !important;
-        }}
-        /* Inputs et sliders */
-        [data-testid="stSidebar"] [role="slider"] {{
-            accent-color: #2c5f2d;
-        }}
-        [data-testid="stSidebar"] input {{
-            background-color: #ffffff !important;
-            color: #2d3436 !important;
-            border: 1px solid #d0cdc5 !important;
-            border-radius: 6px !important;
-        }}
-        /* Multiselect - FORCER LE VERT, PAS DE ROUGE */
-        [data-testid="stSidebar"] [role="combobox"] {{
-            background-color: #ffffff !important;
-            color: #2d3436 !important;
-            border: 1px solid #d0cdc5 !important;
-        }}
-        /* Tags sélectionnés - VERT PARTOUT */
+
+        /* Tags multiselect verts */
         [data-baseweb="tag"],
-        span[data-baseweb="tag"],
-        [data-testid="stSidebar"] [data-baseweb="tag"],
-        .stMultiSelect [data-baseweb="tag"] {{
+        span[data-baseweb="tag"] {{
             background-color: #97bc62 !important;
             color: #ffffff !important;
-            border: none !important;
         }}
+
         /* Bouton X dans les tags */
         [data-baseweb="tag"] svg {{
             fill: #ffffff !important;
         }}
-        /* Popover multiselect */
-        [data-baseweb="popover"] {{
-            background-color: #ffffff !important;
-        }}
-        /* Options dans le dropdown */
-        [role="option"]:hover {{
-            background-color: #f5f1e8 !important;
-        }}
+
+        /* Options sélectionnées dans dropdown */
         [role="option"][aria-selected="true"] {{
             background-color: #97bc62 !important;
             color: #ffffff !important;
         }}
-        /* Checkbox dans multiselect */
-        [data-baseweb="checkbox"] {{
-            border-color: #2c5f2d !important;
-        }}
+
+        /* Checkbox verts */
         [data-baseweb="checkbox"][data-checked="true"] {{
             background-color: #2c5f2d !important;
             border-color: #2c5f2d !important;
         }}
+
+        /* Sliders verts */
+        [role="slider"] {{
+            accent-color: #2c5f2d;
+        }}
+
+        /* Cartes métriques */
         .metric-card {{
             background: #ffffff;
             border: 1px solid #e0ddd5;
             border-radius: 8px;
             padding: 16px;
             box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-            color: #2d3436;
-        }}
-        .block-container {{
-            padding-top: 1.2rem;
-        }}
-        h1, h2, h3, h4, h5, h6 {{
-            color: #2d3436 !important;
-            font-weight: 700 !important;
         }}
         </style>
         """,
@@ -265,7 +202,7 @@ def charger_arrondissements_avec_stats(df_transactions):
         return pd.DataFrame(), None
 
 
-def render_filters_sidebar(df, show_percentile=False):
+def render_filters_sidebar(df, show_percentile=False, show_date_range=True):
     """affiche les filtres dans une sidebar et renvoie le dataframe filtre."""
     if df.empty:
         return df
@@ -274,12 +211,15 @@ def render_filters_sidebar(df, show_percentile=False):
     st.markdown("---")
 
     # periode
-    date_range = st.date_input(
-        "Période",
-        value=(df["date_mutation"].min().date(), df["date_mutation"].max().date()),
-        min_value=df["date_mutation"].min().date(),
-        max_value=df["date_mutation"].max().date(),
-    )
+    if show_date_range:
+        date_range = st.date_input(
+            "Période",
+            value=(df["date_mutation"].min().date(), df["date_mutation"].max().date()),
+            min_value=df["date_mutation"].min().date(),
+            max_value=df["date_mutation"].max().date(),
+        )
+    else:
+        date_range = (df["date_mutation"].min().date(), df["date_mutation"].max().date())
 
     # annees
     annees_disponibles = sorted(df["date_mutation"].dt.year.dropna().unique(), reverse=True)
