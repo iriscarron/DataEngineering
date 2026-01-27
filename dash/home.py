@@ -26,24 +26,24 @@ def afficher_kpis(df):
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.metric("transactions", f"{len(df):,}")
+        st.metric("Transactions", f"{len(df):,}")
 
     with col2:
         prix_moyen = df["valeur_fonciere"].mean()
-        st.metric("prix moyen", f"{prix_moyen/1e6:.2f}M€")
+        st.metric("Prix moyen", f"{prix_moyen/1e6:.2f}M€")
 
     with col3:
         prix_m2_median = df["prix_m2"].median()
-        st.metric("prix m² médian", f"{prix_m2_median:,.0f}€")
+        st.metric("Prix m² médian", f"{prix_m2_median:,.0f}€")
 
     with col4:
         surface_moyenne = df["surface_reelle_bati"].mean()
-        st.metric("surface moyenne", f"{surface_moyenne:.0f}m²")
+        st.metric("Surface moyenne", f"{surface_moyenne:.0f}m²")
 
     with col5:
         seuil_grosse_vente = df["valeur_fonciere"].quantile(0.95)
         nb_grosses = len(df[df["valeur_fonciere"] >= seuil_grosse_vente])
-        st.metric("grosses ventes (top 5%)", nb_grosses)
+        st.metric("Grosses ventes (top 5%)", nb_grosses)
 
 
 
@@ -290,7 +290,7 @@ def render_home(df):
         df_filtre = layout.render_filters_sidebar(df, show_percentile=False)
 
     with col_contenu:
-        st.markdown("## vue d'ensemble")
+        st.markdown("## Vue d'ensemble")
         st.markdown("---")
 
         # kpis
@@ -311,7 +311,7 @@ def render_transactions(df):
         df_filtre = layout.render_filters_sidebar(df, show_percentile=True)
 
     with col_contenu:
-        st.markdown("## analyse des transactions")
+        st.markdown("## Analyse des transactions")
         st.markdown("---")
 
         # kpis specifiques aux transactions
@@ -348,7 +348,7 @@ def render_prix(df):
         df_filtre = layout.render_filters_sidebar(df, show_percentile=False)
 
     with col_contenu:
-        st.markdown("## analyse des prix")
+        st.markdown("## Analyse des prix")
         st.markdown("---")
 
         # kpis prix
@@ -356,7 +356,7 @@ def render_prix(df):
 
         with col_k1:
             prix_min = df_filtre["valeur_fonciere"].min()
-            st.metric("prix min", f"{prix_min/1e6:.2f}M€")
+            st.metric("Prix min", f"{prix_min/1e6:.2f}M€")
 
         with col_k2:
             prix_q1 = df_filtre["valeur_fonciere"].quantile(0.25)
@@ -368,7 +368,7 @@ def render_prix(df):
 
         with col_k4:
             prix_max = df_filtre["valeur_fonciere"].max()
-            st.metric("prix max", f"{prix_max/1e6:.2f}M€")
+            st.metric("Prix max", f"{prix_max/1e6:.2f}M€")
 
         st.markdown("<br>", unsafe_allow_html=True)
 

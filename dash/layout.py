@@ -32,7 +32,7 @@ def configure_page():
 
 
 def apply_theme():
-    """Applique le theming global: tons clairs, fond beige."""
+    """Applique le theming global: tons clairs, fond beige partout."""
     st.markdown(
         """
         <style>
@@ -44,11 +44,20 @@ def apply_theme():
             --muted:#f5f1e8;
             --text:#2d3436;
         }}
-        html, body, [data-testid="stAppViewContainer"] {{
+        /* FOND BEIGE PARTOUT */
+        html, body {{
             font-family: 'Inter', sans-serif;
-            color: #2d3436;
-            background: #f5f1e8;
+            background: #f5f1e8 !important;
         }}
+        [data-testid="stAppViewContainer"],
+        [data-testid="stAppViewContainer"] > div,
+        [data-testid="stMainBlockContainer"],
+        .main,
+        .block-container {{
+            background: #f5f1e8 !important;
+            color: #2d3436 !important;
+        }}
+        /* Sidebar */
         [data-testid="stSidebar"] {{
             background: #faf8f3 !important;
             color: #2d3436;
@@ -80,11 +89,44 @@ def apply_theme():
             border: 1px solid #d0cdc5 !important;
             border-radius: 6px !important;
         }}
-        /* Multiselect */
+        /* Multiselect - FORCER LE VERT, PAS DE ROUGE */
         [data-testid="stSidebar"] [role="combobox"] {{
             background-color: #ffffff !important;
             color: #2d3436 !important;
             border: 1px solid #d0cdc5 !important;
+        }}
+        /* Tags sélectionnés - VERT PARTOUT */
+        [data-baseweb="tag"],
+        span[data-baseweb="tag"],
+        [data-testid="stSidebar"] [data-baseweb="tag"],
+        .stMultiSelect [data-baseweb="tag"] {{
+            background-color: #97bc62 !important;
+            color: #ffffff !important;
+            border: none !important;
+        }}
+        /* Bouton X dans les tags */
+        [data-baseweb="tag"] svg {{
+            fill: #ffffff !important;
+        }}
+        /* Popover multiselect */
+        [data-baseweb="popover"] {{
+            background-color: #ffffff !important;
+        }}
+        /* Options dans le dropdown */
+        [role="option"]:hover {{
+            background-color: #f5f1e8 !important;
+        }}
+        [role="option"][aria-selected="true"] {{
+            background-color: #97bc62 !important;
+            color: #ffffff !important;
+        }}
+        /* Checkbox dans multiselect */
+        [data-baseweb="checkbox"] {{
+            border-color: #2c5f2d !important;
+        }}
+        [data-baseweb="checkbox"][data-checked="true"] {{
+            background-color: #2c5f2d !important;
+            border-color: #2c5f2d !important;
         }}
         .metric-card {{
             background: #ffffff;
@@ -178,6 +220,7 @@ def charger_batiments_avec_transactions(df_transactions):
                 SELECT DISTINCT b.id
                 FROM batiments b
                 INNER JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
+                WHERE b.geom IS NOT NULL
                 LIMIT 5000
             )
             SELECT
@@ -191,6 +234,7 @@ def charger_batiments_avec_transactions(df_transactions):
             FROM batiments b
             INNER JOIN batiments_avec_trans bat ON b.id = bat.id
             LEFT JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
+            WHERE b.geom IS NOT NULL
             GROUP BY b.id, b.geom, b.commune
         """
 
@@ -206,12 +250,12 @@ def render_filters_sidebar(df, show_percentile=False):
     if df.empty:
         return df
 
-    st.markdown("## filtres")
+    st.markdown("## Filtres")
     st.markdown("---")
 
     # periode
     date_range = st.date_input(
-        "période",
+        "Période",
         value=(df["date_mutation"].min().date(), df["date_mutation"].max().date()),
         min_value=df["date_mutation"].min().date(),
         max_value=df["date_mutation"].max().date(),
@@ -222,25 +266,28 @@ def render_filters_sidebar(df, show_percentile=False):
         df["arrondissement"].dropna().unique(),
         key=lambda x: int(x) if str(x).isdigit() else 0,
     )
-    arr_selected = st.multiselect("arrondissements", arrondissements, default=arrondissements)
+    arr_options = ["Tous"] + list(arrondissements)
+    arr_selected = st.multiselect("Arrondissements", arr_options, default=[], placeholder="Sélectionnez un ou plusieurs arrondissements")
 
     # type de bien
     types = sorted(df["type_local"].dropna().unique())
-    types_selected = st.multiselect("type de bien", types, default=types)
+    types_options = ["Tous"] + list(types)
+    types_selected = st.multiselect("Type de bien", types_options, default=[], placeholder="Sélectionnez un ou plusieurs types")
 
     # type de vente
     if "nature_mutation" in df.columns:
         natures = sorted(df["nature_mutation"].dropna().unique())
-        natures_selected = st.multiselect("type de vente", natures, default=natures)
+        natures_options = ["Tous"] + list(natures)
+        natures_selected = st.multiselect("Type de vente", natures_options, default=[], placeholder="Sélectionnez un ou plusieurs types")
     else:
         natures_selected = []
 
     # prix avec champs de saisie
-    st.markdown("**plage de prix (€)**")
+    st.markdown("**Plage de prix (€)**")
     col_prix1, col_prix2 = st.columns(2)
     with col_prix1:
         prix_min = st.number_input(
-            "de",
+            "De",
             min_value=0,
             max_value=int(df["valeur_fonciere"].max()) if not df.empty else 1000000,
             value=0,
@@ -249,7 +296,7 @@ def render_filters_sidebar(df, show_percentile=False):
         )
     with col_prix2:
         prix_max = st.number_input(
-            "à",
+            "À",
             min_value=0,
             max_value=int(df["valeur_fonciere"].max()) if not df.empty else 10000000,
             value=int(df["valeur_fonciere"].quantile(0.99)) if not df.empty else 5000000,
@@ -261,7 +308,7 @@ def render_filters_sidebar(df, show_percentile=False):
     seuil_percentile = 95
     if show_percentile:
         seuil_percentile = st.slider(
-            "seuil grosses ventes (%)",
+            "Seuil grosses ventes (%)",
             min_value=80,
             max_value=99,
             value=95,
@@ -277,15 +324,16 @@ def render_filters_sidebar(df, show_percentile=False):
         )
 
         # Filtre arrondissement
-        if arr_selected:
+        if arr_selected and "Tous" not in arr_selected:
             mask = mask & (df["arrondissement"].isin(arr_selected))
+        # Si rien n'est sélectionné ou "Tous" est sélectionné, on ne filtre pas
 
         # Filtre type de bien
-        if types_selected:
+        if types_selected and "Tous" not in types_selected:
             mask = mask & (df["type_local"].isin(types_selected))
 
         # Filtre type de vente
-        if natures_selected and "nature_mutation" in df.columns:
+        if natures_selected and "Tous" not in natures_selected and "nature_mutation" in df.columns:
             mask = mask & (df["nature_mutation"].isin(natures_selected))
 
         df_filtre = df[mask].copy()

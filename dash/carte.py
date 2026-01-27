@@ -1,5 +1,6 @@
 """carte interactive des transactions geolocalisees avec batiments cadastraux."""
 import json
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
@@ -26,32 +27,32 @@ def render_carte(df):
             st.info("pas de coordonnées disponibles pour la carte.")
             return
 
-        st.markdown(f"## carte - {len(df_map):,} transactions")
+        st.markdown(f"## Carte - {len(df_map):,} transactions")
         st.markdown("---")
 
         # option d'affichage
         col_opt1, col_opt2 = st.columns(2)
         with col_opt1:
             mode_affichage = st.selectbox(
-                "mode d'affichage",
-                ["bâtiments (polygones)", "points de transaction"],
+                "Mode d'affichage",
+                ["Bâtiments (polygones)", "Points de transaction"],
                 index=0
             )
         with col_opt2:
-            if mode_affichage == "bâtiments (polygones)":
+            if mode_affichage == "Bâtiments (polygones)":
                 color_by_display = st.selectbox(
-                    "colorer par",
-                    ["prix au m² moyen"],
+                    "Colorer par",
+                    ["Prix au m² moyen"],
                     index=0
                 )
             else:
                 color_by_display = st.selectbox(
-                    "colorer par",
-                    ["arrondissement", "prix au m²", "type de bien", "type de vente"],
+                    "Colorer par",
+                    ["Arrondissement", "Prix au m²", "Type de bien", "Type de vente"],
                     index=1
                 )
 
-        if mode_affichage == "bâtiments (polygones)":
+        if mode_affichage == "Bâtiments (polygones)":
             # Charger les bâtiments avec transactions
             with st.spinner("chargement des bâtiments..."):
                 df_batiments = layout.charger_batiments_avec_transactions(df_map)
@@ -65,17 +66,24 @@ def render_carte(df):
             # Créer le GeoJSON des bâtiments
             features = []
             for idx, row in df_batiments.iterrows():
-                geom = json.loads(row["geometry"])
-                features.append({
-                    "type": "Feature",
-                    "id": str(idx),
-                    "geometry": geom,
-                    "properties": {
-                        "prix_m2_moyen": float(row["prix_m2_moyen"]) if row["prix_m2_moyen"] else 0,
-                        "nb_transactions": int(row["nb_transactions"]),
-                        "prix_moyen": float(row["prix_moyen"]) if row["prix_moyen"] else 0,
-                    }
-                })
+                # Ignorer les lignes sans géométrie
+                if row["geometry"] is None or pd.isna(row["geometry"]):
+                    continue
+
+                try:
+                    geom = json.loads(row["geometry"])
+                    features.append({
+                        "type": "Feature",
+                        "id": str(idx),
+                        "geometry": geom,
+                        "properties": {
+                            "prix_m2_moyen": float(row["prix_m2_moyen"]) if row["prix_m2_moyen"] else 0,
+                            "nb_transactions": int(row["nb_transactions"]),
+                            "prix_moyen": float(row["prix_moyen"]) if row["prix_moyen"] else 0,
+                        }
+                    })
+                except (json.JSONDecodeError, TypeError):
+                    continue
 
             geojson = {
                 "type": "FeatureCollection",
@@ -97,8 +105,10 @@ def render_carte(df):
                 ),
                 hovertemplate='<b>Bâtiment</b><br>%{text}<extra></extra>',
                 colorbar=dict(
-                    title="Prix m²<br>(€)",
-                    titleside="right",
+                    title=dict(
+                        text="Prix m²<br>(€)",
+                        side="right"
+                    ),
                     tickformat=",",
                     len=0.7,
                 )
@@ -121,10 +131,10 @@ def render_carte(df):
         else:
             # Mode points (ancien affichage)
             color_by = {
-                "arrondissement": "arrondissement",
-                "prix au m²": "prix_m2",
-                "type de bien": "type_local",
-                "type de vente": "nature_mutation"
+                "Arrondissement": "arrondissement",
+                "Prix au m²": "prix_m2",
+                "Type de bien": "type_local",
+                "Type de vente": "nature_mutation"
             }[color_by_display]
 
             kwargs = {

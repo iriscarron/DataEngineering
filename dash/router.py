@@ -13,10 +13,10 @@ def render_app():
     layout.apply_theme()
 
     # titre en haut centré
-    st.markdown("<h1 style='text-align: center;'>dvf paris - transactions immobilières</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>DVF Paris - Transactions Immobilières</h1>", unsafe_allow_html=True)
 
     # navbar juste en dessous
-    pages = ["accueil", "transactions", "prix", "carte", "recherche", "lexique", "à propos"]
+    pages = ["Accueil", "Transactions", "Prix", "Carte", "Recherche", "Lexique", "À propos"]
     choix = navbar.navbar(pages)
 
     # chargement des donnees
@@ -27,17 +27,17 @@ def render_app():
         return
 
     # routage vers les pages (chaque page gere ses propres filtres)
-    if choix == "accueil":
+    if choix == "Accueil":
         home.render_home(df)
-    elif choix == "transactions":
+    elif choix == "Transactions":
         home.render_transactions(df)
-    elif choix == "prix":
+    elif choix == "Prix":
         home.render_prix(df)
-    elif choix == "carte":
+    elif choix == "Carte":
         carte.render_carte(df)
-    elif choix == "recherche":
+    elif choix == "Recherche":
         recherche.render_recherche(df)
-    elif choix == "lexique":
+    elif choix == "Lexique":
         lexique.render_lexique()
-    elif choix == "à propos":
+    elif choix == "À propos":
         about.render_about()
