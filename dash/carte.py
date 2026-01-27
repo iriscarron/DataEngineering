@@ -31,30 +31,85 @@ def render_carte(df):
         st.markdown("---")
 
         # option d'affichage
-        col_opt1, col_opt2 = st.columns(2)
+        col_opt1, col_opt2, col_opt3 = st.columns(3)
         with col_opt1:
-            mode_affichage = st.selectbox(
-                "Mode d'affichage",
-                ["Bâtiments (polygones)", "Points de transaction"],
-                index=0
+            niveau_detail = st.selectbox(
+                "Niveau de détail",
+                ["Arrondissements", "Bâtiments", "Points"],
+                index=0,
+                help="Arrondissements: vue globale, Bâtiments: polygones individuels, Points: transactions précises"
             )
         with col_opt2:
-            if mode_affichage == "Bâtiments (polygones)":
-                color_by_display = st.selectbox(
-                    "Colorer par",
-                    ["Prix au m² moyen"],
-                    index=0
-                )
-            else:
-                color_by_display = st.selectbox(
-                    "Colorer par",
-                    ["Arrondissement", "Prix au m²", "Type de bien", "Type de vente"],
-                    index=1
-                )
+            color_by_display = st.selectbox(
+                "Colorer par",
+                ["Prix au m² moyen"] if niveau_detail in ["Arrondissements", "Bâtiments"] else ["Arrondissement", "Prix au m²", "Type de bien", "Type de vente"],
+                index=0
+            )
+        with col_opt3:
+            if niveau_detail == "Bâtiments":
+                st.info(f"🏘️ Tous les bâtiments avec transactions")
 
-        if mode_affichage == "Bâtiments (polygones)":
-            # Charger les bâtiments avec transactions
-            with st.spinner("chargement des bâtiments..."):
+        if niveau_detail == "Arrondissements":
+            # Vue par arrondissements avec polygones (choroplèthe)
+            with st.spinner("Chargement des statistiques par arrondissement..."):
+                df_arr, geojson = layout.charger_arrondissements_avec_stats(df_map)
+
+            if df_arr.empty or geojson is None:
+                st.warning("Aucune donnée d'arrondissement trouvée.")
+                return
+
+            st.info(f"20 arrondissements - {len(df_map):,} transactions")
+
+            # Mapper les codes arrondissement du GeoJSON avec les stats
+            # Le GeoJSON contient "c_ar" pour le code arrondissement
+            for feature in geojson["features"]:
+                arr_code = feature["properties"].get("c_ar", "")
+                # Convertir en string et retirer le "75" du début si présent (ex: "7501" -> "1")
+                arr_code = str(arr_code)
+                if arr_code and arr_code.startswith("75"):
+                    arr_code = str(int(arr_code[2:]))
+                feature["id"] = arr_code
+
+            # Créer la carte choroplèthe
+            fig = go.Figure(go.Choroplethmapbox(
+                geojson=geojson,
+                locations=df_arr["arrondissement"],
+                z=df_arr["prix_m2_moyen"],
+                colorscale="Viridis",
+                marker_opacity=0.7,
+                marker_line_width=2,
+                marker_line_color="white",
+                text=df_arr.apply(
+                    lambda x: f"Arr. {x['arrondissement']}<br>{x['nb_transactions']:,} transactions<br>Prix m²: {x['prix_m2_moyen']:,.0f}€<br>Prix moyen: {x['prix_moyen']/1e6:.2f}M€",
+                    axis=1
+                ),
+                hovertemplate='<b>%{text}</b><extra></extra>',
+                colorbar=dict(
+                    title=dict(
+                        text="Prix m²<br>(€)",
+                        side="right"
+                    ),
+                    tickformat=",",
+                    len=0.7,
+                )
+            ))
+
+            fig.update_layout(
+                mapbox=dict(
+                    style="carto-positron",
+                    center=dict(lat=48.856, lon=2.352),
+                    zoom=11
+                ),
+                title=f"Vue par arrondissement - {len(df_map):,} transactions",
+                height=700,
+            )
+
+            styliser_fig(fig)
+            st.plotly_chart(fig, use_container_width=True)
+
+        elif niveau_detail == "Bâtiments":
+            # Vue par bâtiments (polygones)
+            with st.spinner("Chargement des bâtiments..."):
                 df_batiments = layout.charger_batiments_avec_transactions(df_map)
 
             if df_batiments.empty:
@@ -128,8 +183,8 @@ def render_carte(df):
             styliser_fig(fig)
             st.plotly_chart(fig, use_container_width=True)
 
-        else:
-            # Mode points (ancien affichage)
+        else:  # niveau_detail == "Points"
+            # Vue par points de transaction
             color_by = {
                 "Arrondissement": "arrondissement",
                 "Prix au m²": "prix_m2",

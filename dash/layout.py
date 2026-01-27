@@ -204,7 +204,7 @@ def charger_batiments_avec_transactions(df_transactions):
     try:
         engine = create_engine(DATABASE_URL)
 
-        # Optimisé: on limite aux bâtiments avec transactions et on utilise un index spatial
+        # Charger tous les bâtiments avec transactions (pas de limite)
         query = """
             WITH trans AS (
                 SELECT
@@ -215,13 +215,6 @@ def charger_batiments_avec_transactions(df_transactions):
                 WHERE latitude IS NOT NULL
                 AND longitude IS NOT NULL
                 AND valeur_fonciere IS NOT NULL
-            ),
-            batiments_avec_trans AS (
-                SELECT DISTINCT b.id
-                FROM batiments b
-                INNER JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
-                WHERE b.geom IS NOT NULL
-                LIMIT 5000
             )
             SELECT
                 b.id as batiment_id,
@@ -232,10 +225,10 @@ def charger_batiments_avec_transactions(df_transactions):
                 AVG(t.prix_m2) as prix_m2_moyen,
                 MAX(t.date_mutation) as derniere_transaction
             FROM batiments b
-            INNER JOIN batiments_avec_trans bat ON b.id = bat.id
-            LEFT JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
+            INNER JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
             WHERE b.geom IS NOT NULL
             GROUP BY b.id, b.geom, b.commune
+            HAVING COUNT(t.latitude) > 0
         """
 
         df = pd.read_sql(query, engine)
@@ -243,6 +236,32 @@ def charger_batiments_avec_transactions(df_transactions):
     except Exception as e:  # pylint: disable=broad-except
         st.error(f"Erreur de chargement des bâtiments: {e}")
         return pd.DataFrame()
+
+
+@st.cache_data(show_spinner=False, ttl=3600)
+def charger_arrondissements_avec_stats(df_transactions):
+    """Charge les stats agrégées par arrondissement avec géométries."""
+    try:
+        import json
+
+        # Charger le GeoJSON des arrondissements
+        with open("data/arrondissements-paris.geojson", "r", encoding="utf-8") as f:
+            geojson = json.load(f)
+
+        # Agréger les stats par arrondissement
+        agg = df_transactions.groupby("arrondissement").agg({
+            "valeur_fonciere": ["mean", "count"],
+            "prix_m2": "mean",
+        }).reset_index()
+        agg.columns = ["arrondissement", "prix_moyen", "nb_transactions", "prix_m2_moyen"]
+
+        # Convertir arrondissement en numéro pour le merge
+        agg["arr_num"] = agg["arrondissement"].astype(str)
+
+        return agg, geojson
+    except Exception as e:  # pylint: disable=broad-except
+        st.error(f"Erreur de chargement des arrondissements: {e}")
+        return pd.DataFrame(), None
 
 
 def render_filters_sidebar(df, show_percentile=False):
