@@ -40,11 +40,14 @@ def render_carte(df):
                 help="Arrondissements: vue globale, Bâtiments: polygones individuels, Points: transactions précises"
             )
         with col_opt2:
-            color_by_display = st.selectbox(
-                "Colorer par",
-                ["Prix au m² moyen"] if niveau_detail in ["Arrondissements", "Bâtiments"] else ["Arrondissement", "Prix au m²", "Type de bien", "Type de vente"],
-                index=0
-            )
+            if niveau_detail != "Bâtiments":
+                color_by_display = st.selectbox(
+                    "Colorer par",
+                    ["Prix au m² moyen"] if niveau_detail == "Arrondissements" else ["Arrondissement", "Prix au m²", "Type de bien", "Type de vente"],
+                    index=0
+                )
+            else:
+                st.metric("Transactions", f"{len(df_map):,}")
 
         if niveau_detail == "Arrondissements":
             # Vue par arrondissements avec polygones (choroplèthe)
@@ -105,8 +108,8 @@ def render_carte(df):
             st.plotly_chart(fig, use_container_width=True)
 
         elif niveau_detail == "Bâtiments":
-            # Vue par bâtiments (polygones) - TOUS les bâtiments avec transactions
-            with st.spinner("Chargement de tous les bâtiments avec transactions..."):
+            # Vue par bâtiments (polygones)
+            with st.spinner("Chargement des bâtiments avec transactions..."):
                 df_batiments = layout.charger_batiments_avec_transactions(df_map)
 
             if df_batiments.empty:

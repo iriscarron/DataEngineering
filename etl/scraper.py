@@ -571,6 +571,6 @@ def run_scraper_geo(annee_min="2020", annee_max="2024", vider_avant=True):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "--geo":
-        run_scraper_geo(annee_min="2024", annee_max="2024")
+        run_scraper_geo(annee_min="2020", annee_max="2024")
     else:
-        run_scraper(annee_min="2024", annee_max="2024")
+        run_scraper(annee_min="2020", annee_max="2024")

@@ -281,6 +281,16 @@ def render_filters_sidebar(df, show_percentile=False):
         max_value=df["date_mutation"].max().date(),
     )
 
+    # annees
+    annees_disponibles = sorted(df["date_mutation"].dt.year.dropna().unique(), reverse=True)
+    annees_options = ["Toutes"] + [str(int(a)) for a in annees_disponibles]
+    annees_selected = st.multiselect(
+        "Années",
+        annees_options,
+        default=[],
+        placeholder="Sélectionnez une ou plusieurs années"
+    )
+
     # arrondissements
     arrondissements = sorted(
         df["arrondissement"].dropna().unique(),
@@ -342,6 +352,11 @@ def render_filters_sidebar(df, show_percentile=False):
             & (df["valeur_fonciere"] >= prix_min)
             & (df["valeur_fonciere"] <= prix_max)
         )
+
+        # Filtre années
+        if annees_selected and "Toutes" not in annees_selected:
+            annees_int = [int(a) for a in annees_selected]
+            mask = mask & (df["date_mutation"].dt.year.isin(annees_int))
 
         # Filtre arrondissement
         if arr_selected and "Tous" not in arr_selected:
