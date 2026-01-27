@@ -200,12 +200,12 @@ def charger_donnees():
 
 @st.cache_data(show_spinner=False, ttl=3600)
 def charger_batiments_avec_transactions(df_transactions):
-    """Charge les batiments avec leurs transactions associees (optimisé)."""
+    """Charge TOUS les batiments de Paris avec leurs transactions - SANS LIMITE."""
     try:
         engine = create_engine(DATABASE_URL)
 
-        # Charger tous les bâtiments avec transactions (pas de limite)
-        # Distance de 0.001 degrés (~110m à Paris) pour matcher plus de bâtiments
+        # Charger TOUS les bâtiments avec transactions - pas de limite
+        # Distance de 0.001 degrés (~110m à Paris) pour matcher les bâtiments
         query = """
             WITH trans AS (
                 SELECT

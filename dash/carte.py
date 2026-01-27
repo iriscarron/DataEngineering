@@ -31,7 +31,7 @@ def render_carte(df):
         st.markdown("---")
 
         # option d'affichage
-        col_opt1, col_opt2, col_opt3 = st.columns(3)
+        col_opt1, col_opt2 = st.columns(2)
         with col_opt1:
             niveau_detail = st.selectbox(
                 "Niveau de détail",
@@ -45,9 +45,6 @@ def render_carte(df):
                 ["Prix au m² moyen"] if niveau_detail in ["Arrondissements", "Bâtiments"] else ["Arrondissement", "Prix au m²", "Type de bien", "Type de vente"],
                 index=0
             )
-        with col_opt3:
-            if niveau_detail == "Bâtiments":
-                st.info(f"🏘️ Tous les bâtiments avec transactions")
 
         if niveau_detail == "Arrondissements":
             # Vue par arrondissements avec polygones (choroplèthe)
@@ -108,15 +105,15 @@ def render_carte(df):
             st.plotly_chart(fig, use_container_width=True)
 
         elif niveau_detail == "Bâtiments":
-            # Vue par bâtiments (polygones)
-            with st.spinner("Chargement des bâtiments..."):
+            # Vue par bâtiments (polygones) - TOUS les bâtiments avec transactions
+            with st.spinner("Chargement de tous les bâtiments avec transactions..."):
                 df_batiments = layout.charger_batiments_avec_transactions(df_map)
 
             if df_batiments.empty:
-                st.warning("aucun bâtiment avec transaction trouvé.")
+                st.warning("Aucun bâtiment avec transaction trouvé.")
                 return
 
-            st.info(f"{len(df_batiments):,} bâtiments avec {len(df_map):,} transactions")
+            st.info(f"🏘️ {len(df_batiments):,} bâtiments avec {len(df_map):,} transactions")
 
             # Créer le GeoJSON des bâtiments
             features = []
