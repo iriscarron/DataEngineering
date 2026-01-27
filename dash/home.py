@@ -316,81 +316,163 @@ def graphique_nature_mutation(df):
 
 
 def render_home(df):
-    """page d'accueil: informations sur le projet."""
+    """page d'accueil epuree pour accueillir l'utilisateur."""
 
-    # Informations sur le projet
+    # CSS et HTML pour la page d'accueil
     st.markdown("""
-    <div style='background: linear-gradient(135deg, #8B7355 0%, #A0826D 100%); padding: 40px; border-radius: 15px; text-align: center; margin-bottom: 30px;'>
-        <h2 style='color: white; margin: 0; font-size: 2rem;'>Dashboard Transactions Immobilières à Paris</h2>
-        <p style='color: white; margin-top: 20px; font-size: 1.2rem;'>
-            Réalisé par <strong>Iris Carron</strong> et <strong>Cléo Detrez</strong>
-        </p>
-        <p style='color: white; margin-top: 10px; font-size: 1rem;'>
-            Dans le cadre de la matière Data Engineering
-        </p>
+    <link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'>
+    <style>
+    .landing-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 60vh;
+        padding: 2rem;
+    }
+    .landing-title {
+        font-family: "Poppins", sans-serif;
+        font-weight: 700;
+        font-size: 2.8rem;
+        color: #3d2817;
+        text-align: center;
+        margin-bottom: 3rem;
+        line-height: 1.3;
+    }
+    .landing-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: 100%;
+        max-width: 600px;
+    }
+    .landing-nav-item {
+        background: linear-gradient(135deg, #f5f1e8 0%, #e6dfd4 100%);
+        padding: 1.3rem 2rem;
+        border-radius: 12px;
+        border: 2px solid #d4c5b0;
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+        transition: all 0.2s;
+    }
+    .landing-nav-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.08);
+        border-color: #0f766e;
+    }
+    .landing-nav-icon {
+        font-size: 1.8rem;
+        color: #3d2817;
+        min-width: 40px;
+        text-align: center;
+    }
+    .landing-nav-content {
+        flex: 1;
+    }
+    .landing-nav-text {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #3d2817;
+        margin: 0;
+    }
+    .landing-nav-desc {
+        font-size: 0.85rem;
+        color: #666;
+        margin: 0.2rem 0 0 0;
+    }
+    .landing-arrow {
+        position: fixed;
+        bottom: 2.5rem;
+        right: 2.5rem;
+        width: 55px;
+        height: 55px;
+        background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+    }
+    .landing-arrow i {
+        color: white;
+        font-size: 1.3rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class='landing-container'>
+        <div class='landing-title'>
+            Dashboard Transactions Immobilières<br>à Paris
+        </div>
+        <div class='landing-nav'>
+            <div class='landing-nav-item' id='nav-trans'>
+                <div class='landing-nav-icon'><i class='fa-solid fa-building'></i></div>
+                <div class='landing-nav-content'>
+                    <div class='landing-nav-text'>Transactions</div>
+                    <div class='landing-nav-desc'>Explorez les ventes immobilieres</div>
+                </div>
+            </div>
+            <div class='landing-nav-item' id='nav-prix'>
+                <div class='landing-nav-icon'><i class='fa-solid fa-euro-sign'></i></div>
+                <div class='landing-nav-content'>
+                    <div class='landing-nav-text'>Prix</div>
+                    <div class='landing-nav-desc'>Analysez les prix au m2</div>
+                </div>
+            </div>
+            <div class='landing-nav-item' id='nav-carte'>
+                <div class='landing-nav-icon'><i class='fa-solid fa-map'></i></div>
+                <div class='landing-nav-content'>
+                    <div class='landing-nav-text'>Carte</div>
+                    <div class='landing-nav-desc'>Visualisez les donnees geographiques</div>
+                </div>
+            </div>
+            <div class='landing-nav-item' id='nav-rech'>
+                <div class='landing-nav-icon'><i class='fa-solid fa-magnifying-glass'></i></div>
+                <div class='landing-nav-content'>
+                    <div class='landing-nav-text'>Recherche</div>
+                    <div class='landing-nav-desc'>Trouvez des transactions specifiques</div>
+                </div>
+            </div>
+            <div class='landing-nav-item' id='nav-about'>
+                <div class='landing-nav-icon'><i class='fa-solid fa-star'></i></div>
+                <div class='landing-nav-content'>
+                    <div class='landing-nav-text'>A propos</div>
+                    <div class='landing-nav-desc'>Informations sur le projet</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class='landing-arrow'>
+        <i class='fa-solid fa-arrow-right'></i>
     </div>
     """, unsafe_allow_html=True)
 
-    # Lexique
-    st.markdown("""
-    <div style='background-color: #D4A76A; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
-        <h3 style='color: #fff; margin-top: 0;'>Types d'habitation</h3>
-        <ul style='color: #fff; font-size: 16px;'>
-            <li><strong>Appartement</strong> : logement situé dans un immeuble collectif</li>
-            <li><strong>Maison</strong> : construction individuelle destinée à l'habitation</li>
-            <li><strong>Dépendance</strong> : bâtiment annexe (garage, cave, cellier, etc.)</li>
-            <li><strong>Local industriel</strong> : bâtiment à usage industriel ou artisanal</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style='background-color: #A0826D; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
-        <h3 style='color: #fff; margin-top: 0;'>Types de vente</h3>
-        <ul style='color: #fff; font-size: 16px;'>
-            <li><strong>Vente</strong> : transaction classique entre un vendeur et un acheteur</li>
-            <li><strong>Vente en l'état futur d'achèvement (VEFA)</strong> : achat sur plan d'un bien en construction</li>
-            <li><strong>Adjudication</strong> : vente aux enchères publiques</li>
-            <li><strong>Expropriation</strong> : acquisition forcée par une autorité publique</li>
-            <li><strong>Vente de terrain à bâtir</strong> : vente d'un terrain nu destiné à la construction</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style='background-color: #8B7355; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
-        <h3 style='color: #fff; margin-top: 0;'>Indicateurs clés</h3>
-        <ul style='color: #fff; font-size: 16px;'>
-            <li><strong>Valeur foncière</strong> : prix de vente total du bien en euros</li>
-            <li><strong>Prix au m²</strong> : prix de vente divisé par la surface habitable</li>
-            <li><strong>Surface réelle bâtie</strong> : surface habitable du bien en m²</li>
-            <li><strong>Nombre de pièces</strong> : nombre de pièces principales (hors cuisine et salle de bain)</li>
-            <li><strong>Arrondissement</strong> : division administrative de Paris (1er au 20ème)</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style='background-color: #6B8E23; padding: 20px; border-radius: 10px;'>
-        <h3 style='color: #fff; margin-top: 0;'>Sources des données</h3>
-        <p style='color: #fff; font-size: 16px;'>
-            Les données proviennent de la base <strong>Demandes de Valeurs Foncières (DVF)</strong>
-            publiée par la Direction Générale des Finances Publiques (DGFiP).
-        </p>
-        <p style='color: #fff; font-size: 16px;'>
-            Les données cadastrales des bâtiments proviennent du <strong>Cadastre Etalab</strong>
-            et de la <strong>Base de Données Nationale des Bâtiments (BDNB)</strong>.
-        </p>
-        <p style='color: #fff; font-size: 16px; margin-top: 20px;'>
-            <strong>Données scrappées :</strong>
-        </p>
-        <ul style='color: #fff; font-size: 16px;'>
-            <li>API DVF+ (Cerema) : transactions immobilières géolocalisées (2020-2024)</li>
-            <li>Cadastre Etalab : géométries des bâtiments parisiens (~110 000 bâtiments)</li>
-            <li>GeoJSON Paris : limites administratives des 20 arrondissements</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
+    # Boutons invisibles pour la navigation
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col1:
+        if st.button("Transactions", key="nav-btn-trans", help="Voir les transactions"):
+            st.session_state["nav"] = "Transactions"
+            st.rerun()
+        if st.button("Prix", key="nav-btn-prix", help="Voir les prix"):
+            st.session_state["nav"] = "Prix"
+            st.rerun()
+    with col2:
+        if st.button("Carte", key="nav-btn-carte", help="Voir la carte"):
+            st.session_state["nav"] = "Carte"
+            st.rerun()
+        if st.button("Recherche", key="nav-btn-rech", help="Rechercher"):
+            st.session_state["nav"] = "Recherche"
+            st.rerun()
+    with col3:
+        if st.button("A propos", key="nav-btn-about", help="A propos"):
+            st.session_state["nav"] = "À propos"
+            st.rerun()
+        if st.button("Commencer", key="nav-btn-arrow", help="Commencer"):
+            st.session_state["nav"] = "Transactions"
+            st.rerun()
 
 
 
