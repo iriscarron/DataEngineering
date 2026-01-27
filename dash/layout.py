@@ -32,72 +32,73 @@ def configure_page():
 
 
 def apply_theme():
-    """Applique le theming global: tons bleus, fond noir, filtres verts turquoise."""
+    """Applique le theming global: tons clairs, fond beige."""
     st.markdown(
         """
         <style>
         @import url(
         'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
         :root {{
-            --primary:#0ea5e9;
-            --accent:#2563eb;
-            --muted:#1a1a2e;
-            --text:#ffffff;
+            --primary:#2c5f2d;
+            --accent:#97bc62;
+            --muted:#f5f1e8;
+            --text:#2d3436;
         }}
         html, body, [data-testid="stAppViewContainer"] {{
             font-family: 'Inter', sans-serif;
-            color: #ffffff;
-            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%);
+            color: #2d3436;
+            background: #f5f1e8;
         }}
         [data-testid="stSidebar"] {{
-            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 50%, #16213e 100%) !important;
-            color: #ffffff;
+            background: #faf8f3 !important;
+            color: #2d3436;
+            border-right: 1px solid #e0ddd5;
         }}
         [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2,
         [data-testid="stSidebar"] h3, [data-testid="stSidebar"] label {{
-            color: #ffffff !important;
+            color: #2d3436 !important;
             font-weight: 600;
         }}
         /* Boutons de filtre */
         [data-testid="stSidebar"] button {{
-            background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%) !important;
+            background: #2c5f2d !important;
             color: #ffffff !important;
             border: none !important;
-            border-radius: 8px !important;
-            font-weight: 600 !important;
+            border-radius: 6px !important;
+            font-weight: 500 !important;
         }}
         [data-testid="stSidebar"] button:hover {{
-            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%) !important;
+            background: #3d7a3e !important;
         }}
         /* Inputs et sliders */
         [data-testid="stSidebar"] [role="slider"] {{
-            accent-color: #06b6d4;
+            accent-color: #2c5f2d;
         }}
         [data-testid="stSidebar"] input {{
-            background-color: #16213e !important;
-            color: #ffffff !important;
-            border: 1px solid #0ea5e9 !important;
+            background-color: #ffffff !important;
+            color: #2d3436 !important;
+            border: 1px solid #d0cdc5 !important;
             border-radius: 6px !important;
         }}
         /* Multiselect */
         [data-testid="stSidebar"] [role="combobox"] {{
-            background-color: #16213e !important;
-            color: #ffffff !important;
-            border: 1px solid #0ea5e9 !important;
+            background-color: #ffffff !important;
+            color: #2d3436 !important;
+            border: 1px solid #d0cdc5 !important;
         }}
         .metric-card {{
-            background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
-            border: 1px solid #0ea5e9;
-            border-radius: 12px;
+            background: #ffffff;
+            border: 1px solid #e0ddd5;
+            border-radius: 8px;
             padding: 16px;
-            box-shadow: 0 2px 8px rgba(14, 165, 233, 0.2);
-            color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            color: #2d3436;
         }}
         .block-container {{
             padding-top: 1.2rem;
         }}
         h1, h2, h3, h4, h5, h6 {{
-            color: #ffffff !important;
+            color: #2d3436 !important;
             font-weight: 700 !important;
         }}
         </style>
@@ -107,26 +108,26 @@ def apply_theme():
 
 
 def styliser_fig(fig):
-    """Uniformise la mise en forme des figures Plotly: fond noir, texte blanc, bleu."""
+    """Uniformise la mise en forme des figures Plotly: fond clair."""
     fig.update_layout(
-        font={"family": "Inter", "color": "#ffffff", "size": 12},
-        title_font={"size": 18, "color": "#ffffff", "family": "Inter", "weight": 700},
-        plot_bgcolor="#0f0f1e",
-        paper_bgcolor="#1a1a2e",
+        font={"family": "Inter", "color": "#2d3436", "size": 12},
+        title_font={"size": 18, "color": "#2d3436", "family": "Inter", "weight": 700},
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff",
         hoverlabel={
-            "bgcolor": "#16213e",
+            "bgcolor": "#f5f1e8",
             "font_size": 12,
             "font_family": "Inter",
             "namelength": -1,
-            "font_color": "#ffffff"
+            "font_color": "#2d3436"
         },
         margin={"t": 60, "b": 40, "l": 40, "r": 20},
         legend={"orientation": "h", "y": -0.25,
-                "x": 0, "title": None, "font": {"color": "#ffffff"}},
+                "x": 0, "title": None, "font": {"color": "#2d3436"}},
         colorway=COLORWAY,
         hovermode="closest",
-        xaxis={"showgrid": True, "gridwidth": 1, "gridcolor": "#334155"},
-        yaxis={"showgrid": True, "gridwidth": 1, "gridcolor": "#334155"},
+        xaxis={"showgrid": True, "gridwidth": 1, "gridcolor": "#e0ddd5"},
+        yaxis={"showgrid": True, "gridwidth": 1, "gridcolor": "#e0ddd5"},
     )
     return fig
 
@@ -155,14 +156,13 @@ def charger_donnees():
         return pd.DataFrame()
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, ttl=3600)
 def charger_batiments_avec_transactions(df_transactions):
-    """Charge les batiments avec leurs transactions associees."""
+    """Charge les batiments avec leurs transactions associees (optimisé)."""
     try:
         engine = create_engine(DATABASE_URL)
 
-        # Créer une table temporaire avec les transactions filtrées
-        # On va joindre les bâtiments avec les transactions par proximité
+        # Optimisé: on limite aux bâtiments avec transactions et on utilise un index spatial
         query = """
             WITH trans AS (
                 SELECT
@@ -173,19 +173,25 @@ def charger_batiments_avec_transactions(df_transactions):
                 WHERE latitude IS NOT NULL
                 AND longitude IS NOT NULL
                 AND valeur_fonciere IS NOT NULL
+            ),
+            batiments_avec_trans AS (
+                SELECT DISTINCT b.id
+                FROM batiments b
+                INNER JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
+                LIMIT 5000
             )
             SELECT
                 b.id as batiment_id,
-                ST_AsGeoJSON(b.geom) as geometry,
+                ST_AsGeoJSON(ST_Simplify(b.geom, 0.00001)) as geometry,
                 b.commune,
                 COUNT(t.latitude) as nb_transactions,
                 AVG(t.valeur_fonciere) as prix_moyen,
                 AVG(t.prix_m2) as prix_m2_moyen,
                 MAX(t.date_mutation) as derniere_transaction
             FROM batiments b
+            INNER JOIN batiments_avec_trans bat ON b.id = bat.id
             LEFT JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.0001)
             GROUP BY b.id, b.geom, b.commune
-            HAVING COUNT(t.latitude) > 0
         """
 
         df = pd.read_sql(query, engine)
@@ -216,21 +222,18 @@ def render_filters_sidebar(df, show_percentile=False):
         df["arrondissement"].dropna().unique(),
         key=lambda x: int(x) if str(x).isdigit() else 0,
     )
-    arr_options = ["tous"] + list(arrondissements)
-    arr_selected = st.selectbox("arrondissement", arr_options, index=0)
+    arr_selected = st.multiselect("arrondissements", arrondissements, default=arrondissements)
 
     # type de bien
     types = sorted(df["type_local"].dropna().unique())
-    types_options = ["tous"] + list(types)
-    type_selected = st.selectbox("type de bien", types_options, index=0)
+    types_selected = st.multiselect("type de bien", types, default=types)
 
     # type de vente
     if "nature_mutation" in df.columns:
         natures = sorted(df["nature_mutation"].dropna().unique())
-        natures_options = ["tous"] + list(natures)
-        nature_selected = st.selectbox("type de vente", natures_options, index=0)
+        natures_selected = st.multiselect("type de vente", natures, default=natures)
     else:
-        nature_selected = "tous"
+        natures_selected = []
 
     # prix avec champs de saisie
     st.markdown("**plage de prix (€)**")
@@ -274,16 +277,16 @@ def render_filters_sidebar(df, show_percentile=False):
         )
 
         # Filtre arrondissement
-        if arr_selected != "tous":
-            mask = mask & (df["arrondissement"] == arr_selected)
+        if arr_selected:
+            mask = mask & (df["arrondissement"].isin(arr_selected))
 
         # Filtre type de bien
-        if type_selected != "tous":
-            mask = mask & (df["type_local"] == type_selected)
+        if types_selected:
+            mask = mask & (df["type_local"].isin(types_selected))
 
         # Filtre type de vente
-        if nature_selected != "tous" and "nature_mutation" in df.columns:
-            mask = mask & (df["nature_mutation"] == nature_selected)
+        if natures_selected and "nature_mutation" in df.columns:
+            mask = mask & (df["nature_mutation"].isin(natures_selected))
 
         df_filtre = df[mask].copy()
     else:

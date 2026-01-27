@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from dash import about, carte, home, navbar, setup, recherche
+from dash import about, carte, home, navbar, setup, recherche, lexique
 from dash import layout
 
 
@@ -12,11 +12,11 @@ def render_app():
     layout.configure_page()
     layout.apply_theme()
 
-    # titre en haut
-    st.title("dvf paris - transactions immobilières")
+    # titre en haut centré
+    st.markdown("<h1 style='text-align: center;'>dvf paris - transactions immobilières</h1>", unsafe_allow_html=True)
 
     # navbar juste en dessous
-    pages = ["accueil", "transactions", "prix", "carte", "recherche", "à propos"]
+    pages = ["accueil", "transactions", "prix", "carte", "recherche", "lexique", "à propos"]
     choix = navbar.navbar(pages)
 
     # chargement des donnees
@@ -37,5 +37,7 @@ def render_app():
         carte.render_carte(df)
     elif choix == "recherche":
         recherche.render_recherche(df)
+    elif choix == "lexique":
+        lexique.render_lexique()
     elif choix == "à propos":
         about.render_about()
