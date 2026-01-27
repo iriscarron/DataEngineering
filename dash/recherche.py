@@ -246,7 +246,10 @@ def render_recherche(_df):
                 st.plotly_chart(fig, use_container_width=True)
 
         with tab3:
-            df_geo = df_resultats.dropna(subset=["latitude", "longitude"])
+            if "latitude" in df_resultats.columns and "longitude" in df_resultats.columns:
+                df_geo = df_resultats.dropna(subset=["latitude", "longitude"])
+            else:
+                df_geo = pd.DataFrame()
 
             if df_geo.empty:
                 st.warning("Aucune coordonnée GPS disponible pour ces résultats")

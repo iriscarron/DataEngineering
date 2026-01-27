@@ -8,18 +8,18 @@ from sqlalchemy import create_engine
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://dvf:dvf@localhost:5432/dvf")
 
-PRIMARY_COLOR = "#0ea5e9"
-SECONDARY_COLOR = "#06b6d4"
-ACCENT_COLOR = "#2563eb"
-MUTED_BG = "#1a1a2e"
-TEXT_COLOR = "#ffffff"
+PRIMARY_COLOR = "#2c5f2d"
+SECONDARY_COLOR = "#97bc62"
+ACCENT_COLOR = "#6b8e23"
+MUTED_BG = "#f5f1e8"
+TEXT_COLOR = "#2d3436"
 COLORWAY = [
-    "#0ea5e9",
-    "#06b6d4",
-    "#2563eb",
-    "#3b82f6",
-    "#60a5fa",
-    "#93c5fd",
+    "#2c5f2d",  # vert foncé
+    "#97bc62",  # vert clair
+    "#6b8e23",  # olive
+    "#4a7c59",  # vert forêt
+    "#8B7355",  # brun/terre
+    "#A0826D",  # beige foncé
 ]
 
 px.defaults.template = "plotly_white"
@@ -87,12 +87,12 @@ def apply_theme():
 
 
 def styliser_fig(fig):
-    """Uniformise la mise en forme des figures Plotly: fond clair."""
+    """Uniformise la mise en forme des figures Plotly: fond beige."""
     fig.update_layout(
         font={"family": "Inter", "color": "#2d3436", "size": 12},
-        title_font={"size": 18, "color": "#2d3436", "family": "Inter", "weight": 700},
-        plot_bgcolor="#ffffff",
-        paper_bgcolor="#ffffff",
+        title_font={"size": 18, "color": "#8B7355", "family": "Inter", "weight": 700},
+        plot_bgcolor="#f5f1e8",
+        paper_bgcolor="#f5f1e8",
         hoverlabel={
             "bgcolor": "#f5f1e8",
             "font_size": 12,
@@ -202,13 +202,11 @@ def charger_arrondissements_avec_stats(df_transactions):
         return pd.DataFrame(), None
 
 
-def render_filters_sidebar(df, show_percentile=False, show_date_range=True):
+def render_filters_sidebar(df, show_percentile=False, show_date_range=False):
     """affiche les filtres dans une sidebar et renvoie le dataframe filtre."""
     if df.empty:
         return df
 
-    st.markdown("## Filtres")
-    st.markdown("---")
 
     # periode
     if show_date_range:

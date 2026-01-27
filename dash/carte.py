@@ -31,27 +31,16 @@ def render_carte(df):
             st.info("pas de coordonnées disponibles pour la carte.")
             return
 
-        st.markdown(f"## Carte - {len(df_map):,} transactions")
-        st.markdown("---")
 
         # option d'affichage
-        col_opt1, col_opt2 = st.columns(2)
-        with col_opt1:
-            niveau_detail = st.selectbox(
-                "Niveau de détail",
-                ["Arrondissements", "Bâtiments", "Points"],
-                index=0,
-                help="Arrondissements: vue globale, Bâtiments: polygones individuels, Points: transactions précises"
-            )
-        with col_opt2:
-            if niveau_detail != "Bâtiments":
-                color_by_display = st.selectbox(
-                    "Colorer par",
-                    ["Prix au m² moyen"] if niveau_detail == "Arrondissements" else ["Arrondissement", "Prix au m²", "Type de bien", "Type de vente"],
-                    index=0
-                )
-            else:
-                st.metric("Transactions", f"{len(df_map):,}")
+        niveau_detail = st.selectbox(
+            "Niveau de détail",
+            ["Arrondissements", "Bâtiments", "Points"],
+            index=0,
+            help="Arrondissements: vue globale, Bâtiments: polygones individuels, Points: transactions précises"
+        )
+
+        color_by_display = "Prix au m²"
 
         if niveau_detail == "Arrondissements":
             # Vue par arrondissements avec polygones (choroplèthe)
@@ -104,7 +93,7 @@ def render_carte(df):
                     center=dict(lat=48.856, lon=2.352),
                     zoom=11
                 ),
-                title=f"Vue par arrondissement - {len(df_map):,} transactions",
+                title=f"Prix moyen au m² par arrondissement à Paris ({len(df_map):,} transactions)",
                 height=700,
             )
 
@@ -180,7 +169,7 @@ def render_carte(df):
                     center=dict(lat=48.856, lon=2.352),
                     zoom=11.5
                 ),
-                title=f"{len(df_batiments):,} bâtiments avec transactions à Paris",
+                title=f"Bâtiments parisiens avec transactions immobilières ({len(df_batiments):,} bâtiments)",
                 height=700,
             )
 

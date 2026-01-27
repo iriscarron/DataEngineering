@@ -4,8 +4,6 @@ import streamlit as st
 
 def render_about():
     """affiche la page a propos."""
-    st.markdown("## À propos")
-    st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown(
         """
