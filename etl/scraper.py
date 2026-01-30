@@ -18,7 +18,6 @@ from sqlalchemy import create_engine, text
 from datetime import datetime
 import urllib3
 
-# Desactiver les avertissements SSL pour dev (HTTPS est quand meme verifiee via Retry)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -32,11 +31,9 @@ class TLSAdapter(HTTPAdapter):
         kwargs['ssl_context'] = ctx
         return super().init_poolmanager(*args, **kwargs)
 
-# URL de base de l'API DVF+
 API_BASE_URL = "http://apidf-preprod.cerema.fr/dvf_opendata/mutations/"
 API_GEOMUTATIONS_URL = "http://apidf-preprod.cerema.fr/dvf_opendata/geomutations/"
 
-# Coordonnees approximatives des arrondissements de Paris (centre)
 COORDS_ARRONDISSEMENTS = {
     "1": (48.8600, 2.3470), "2": (48.8680, 2.3410), "3": (48.8650, 2.3610),
     "4": (48.8540, 2.3570), "5": (48.8460, 2.3500), "6": (48.8490, 2.3340),
@@ -56,17 +53,15 @@ def creer_session_http():
         total=5,
         backoff_factor=1,
         status_forcelist=[500, 502, 503, 504],
-        allowed_methods=["GET", "POST"]  # Force retry sur GET/POST
+        allowed_methods=["GET", "POST"] 
     )
     adapter = TLSAdapter(max_retries=retry)
     session.mount("https://", adapter)
     session.mount("http://", adapter)
     return session
 
-# Codes INSEE des 20 arrondissements de Paris
-PARIS_INSEE_CODES = [f"751{str(i).zfill(2)}" for i in range(1, 21)]
+PARIS_INSEE_CODES = [f"751{str(i).zfill(2)}" for i in range(1, 21)] # code  INSEE des 20 arrondissements de Paris
 
-# Connexion base de donnees
 def _normalize_db_url(url: str) -> str:
     parsed = urlparse(url)
     host = parsed.hostname or ""
@@ -93,7 +88,7 @@ def ensure_db_driver():
     try:
         subprocess.run([sys.executable, "-m", "pip", "install", "psycopg2-binary"], check=True)
         importlib.import_module("psycopg2")
-        print("psycopg2-binary install")
+        print("psycopg2-binary installé")
     except Exception as exc:  # pylint: disable=broad-except
         print(f"Echec d'installation de psycopg2-binary: {exc}")
         sys.exit(1)
@@ -124,7 +119,6 @@ def get_mutations_commune(code_insee, annee_min="2020", annee_max="2024", sessio
             try:
                 print(f"  DEBUG: Tentative {attempt+1} - URL: {API_BASE_URL}")
                 response = session.get(API_BASE_URL, params=params, timeout=60, allow_redirects=False, verify=False)
-                # Si redirection, suivre manuellement sans vérifier SSL
                 if response.status_code in [301, 302, 303, 307, 308]:
                     redirect_url = response.headers.get('Location')
                     print(f"  DEBUG: Redirection vers {redirect_url}")
@@ -274,28 +268,22 @@ def transformer_donnees(df):
 
     transformed = pd.DataFrame()
 
-    # Date de mutation
     if "datemut" in df.columns:
         transformed["date_mutation"] = pd.to_datetime(df["datemut"], errors="coerce")
 
-    # Valeur fonciere
     if "valeurfonc" in df.columns:
         transformed["valeur_fonciere"] = pd.to_numeric(df["valeurfonc"], errors="coerce")
 
-    # Surface batie
     if "sbati" in df.columns:
         transformed["surface_reelle_bati"] = pd.to_numeric(df["sbati"], errors="coerce")
 
-    # Surface terrain
     if "sterr" in df.columns:
         transformed["surface_terrain"] = pd.to_numeric(df["sterr"], errors="coerce")
 
-    # Calcul prix au m2
     transformed["prix_m2"] = (
         transformed["valeur_fonciere"] / transformed["surface_reelle_bati"]
     ).replace([float("inf"), float("-inf")], None)
 
-    # Type de bien
     if "libtypbien" in df.columns:
         transformed["type_local"] = df["libtypbien"]
     elif "codtypbien" in df.columns:
@@ -308,11 +296,9 @@ def transformer_donnees(df):
         }
         transformed["type_local"] = df["codtypbien"].astype(str).map(type_mapping).fillna("Autre")
 
-    # Nature de la mutation (type de vente)
     if "libnatmut" in df.columns:
         transformed["nature_mutation"] = df["libnatmut"]
 
-    # Code INSEE et arrondissement
     if "l_codinsee" in df.columns:
         transformed["code_insee"] = df["l_codinsee"].apply(
             lambda x: x[0] if isinstance(x, list) and len(x) > 0 else str(x)
@@ -321,18 +307,15 @@ def transformer_donnees(df):
             lambda x: str(int(str(x)[-2:])) if pd.notna(x) and len(str(x)) >= 2 else None
         )
 
-    # Code postal
     if "l_codinsee" in df.columns:
         transformed["code_postal"] = transformed["code_insee"].apply(
             lambda x: f"750{str(x)[-2:]}" if pd.notna(x) else None
         )
 
-    # Coordonnees GPS (basees sur l'arrondissement avec decalage aleatoire)
     import random
     def get_coords_arr(arr):
         if arr and str(arr) in COORDS_ARRONDISSEMENTS:
             lat, lon = COORDS_ARRONDISSEMENTS[str(arr)]
-            # Ajouter un decalage aleatoire (environ 500m)
             lat += random.uniform(-0.004, 0.004)
             lon += random.uniform(-0.005, 0.005)
             return lat, lon
@@ -343,22 +326,17 @@ def transformer_donnees(df):
         transformed["latitude"] = coords.apply(lambda x: x[0])
         transformed["longitude"] = coords.apply(lambda x: x[1])
 
-    # ID mutation
     if "idmutation" in df.columns:
         transformed["id_mutation"] = df["idmutation"]
 
-    # Nombre de pieces
     if "nbpiece" in df.columns:
         transformed["nb_pieces"] = pd.to_numeric(df["nbpiece"], errors="coerce")
 
-    # VEFA (vente en etat futur d'achevement)
     if "vefa" in df.columns:
         transformed["vefa"] = df["vefa"].astype(bool) if df["vefa"].notna().any() else False
 
-    # Metadonnees
     transformed["scraped_at"] = datetime.now()
 
-    # Supprimer les lignes sans donnees essentielles
     transformed = transformed.dropna(subset=["valeur_fonciere", "date_mutation"])
 
     return transformed
@@ -399,7 +377,6 @@ def transformer_donnees_geo(features):
         else:
             lat, lon = None, None
 
-        # Extraire l'arrondissement du code INSEE
         code_insee = props.get("l_codinsee", [""])[0] if isinstance(props.get("l_codinsee"), list) else str(props.get("l_codinsee", ""))
         if code_insee and len(code_insee) >= 2:
             arrondissement = str(int(code_insee[-2:]))
@@ -408,7 +385,6 @@ def transformer_donnees_geo(features):
             arrondissement = None
             code_postal = None
 
-        # Calculer le prix au m2
         valeur = props.get("valeurfonc")
         surface = props.get("sbati")
         if valeur and surface and float(surface) > 0:
@@ -440,11 +416,9 @@ def transformer_donnees_geo(features):
 
     df = pd.DataFrame(records)
 
-    # Convertir les dates
     if "date_mutation" in df.columns:
         df["date_mutation"] = pd.to_datetime(df["date_mutation"], errors="coerce")
 
-    # Supprimer les lignes sans donnees essentielles
     df = df.dropna(subset=["valeur_fonciere", "date_mutation"])
 
     return df
