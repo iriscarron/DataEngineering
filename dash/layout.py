@@ -43,6 +43,15 @@ def apply_theme():
             font-family: 'Inter', sans-serif;
         }}
 
+        /* Fond beige principal */
+        [data-testid="stAppViewContainer"] {{
+            background-color: #f5f1e8 !important;
+        }}
+
+        [data-testid="stMainBlockContainer"] {{
+            background-color: #f5f1e8 !important;
+        }}
+
         /* Tags multiselect verts */
         [data-baseweb="tag"],
         span[data-baseweb="tag"] {{

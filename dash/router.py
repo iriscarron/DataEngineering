@@ -12,8 +12,6 @@ def render_app():
     layout.configure_page()
     layout.apply_theme()
 
-    st.markdown("<h1 style='text-align: center;'>DVF Paris - Transactions Immobilières</h1>", unsafe_allow_html=True)
-
     pages = ["Accueil", "Transactions", "Prix", "Carte", "Recherche", "Lexique", "À propos"]
     choix = navbar.navbar(pages)
 
