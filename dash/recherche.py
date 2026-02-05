@@ -14,13 +14,13 @@ def render_recherche(_df):
 
     st.markdown(
 		"""
-		<div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
+		<div style='background: linear-gradient(135deg, #3d2817 0%, #5b3a22 100%);
 					padding: 2rem; border-radius: 16px; margin-bottom: 2rem;
-					border: 1px solid #0ea5e9; box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);'>
-			<h2 style='color: #0ea5e9; margin: 0; font-size: 2rem;'>
+					border: 1px solid #8b7355; box-shadow: 0 4px 16px rgba(61, 40, 23, 0.35);'>
+			<h2 style='color: #e6dcc8; margin: 0; font-size: 2rem;'>
 				Recherche Intelligente
 			</h2>
-			<p style='color: #94a3b8; margin-top: 0.5rem; font-size: 1.1rem;'>
+			<p style='color: #d6c6a8; margin-top: 0.5rem; font-size: 1.1rem;'>
 				Moteur de recherche Elasticsearch avec recherche floue et filtres avancés
 			</p>
 		</div>
@@ -82,11 +82,11 @@ def render_recherche(_df):
         with col1:
             st.markdown(
 				f"""
-				<div style='background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+				<div style='background: linear-gradient(135deg, #8b5a2b 0%, #a67c52 100%);
 							padding: 1.5rem; border-radius: 12px; text-align: center;
-							box-shadow: 0 4px 12px rgba(14, 165, 233, 0.4);'>
+							box-shadow: 0 4px 12px rgba(139, 90, 43, 0.4);'>
 					<div style='font-size: 2.5rem; font-weight: 700; color: white;'>{len(resultats)}</div>
-					<div style='color: #e0f2fe; font-size: 0.9rem; margin-top: 0.3rem;'>Résultats</div>
+					<div style='color: #f5efe6; font-size: 0.9rem; margin-top: 0.3rem;'>Résultats</div>
 				</div>
 				""",
 				unsafe_allow_html=True,
@@ -96,11 +96,11 @@ def render_recherche(_df):
             prix_moyen = df_resultats["valeur_fonciere"].mean()
             st.markdown(
 				f"""
-				<div style='background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+				<div style='background: linear-gradient(135deg, #6b3f1d 0%, #8b5a2b 100%);
 							padding: 1.5rem; border-radius: 12px; text-align: center;
-							box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);'>
+							box-shadow: 0 4px 12px rgba(107, 63, 29, 0.4);'>
 					<div style='font-size: 2.5rem; font-weight: 700; color: white;'>{prix_moyen/1e6:.2f}M€</div>
-					<div style='color: #dbeafe; font-size: 0.9rem; margin-top: 0.3rem;'>Prix moyen</div>
+					<div style='color: #f1e6d6; font-size: 0.9rem; margin-top: 0.3rem;'>Prix moyen</div>
 				</div>
 				""",
 				unsafe_allow_html=True,
@@ -110,11 +110,11 @@ def render_recherche(_df):
             prix_m2_med = df_resultats["prix_m2"].median()
             st.markdown(
 				f"""
-				<div style='background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+				<div style='background: linear-gradient(135deg, #9c6b3b 0%, #b08968 100%);
 							padding: 1.5rem; border-radius: 12px; text-align: center;
-							box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);'>
+							box-shadow: 0 4px 12px rgba(156, 107, 59, 0.4);'>
 					<div style='font-size: 2.5rem; font-weight: 700; color: white;'>{prix_m2_med:,.0f}€</div>
-					<div style='color: #cffafe; font-size: 0.9rem; margin-top: 0.3rem;'>Prix/m² médian</div>
+					<div style='color: #f5efe6; font-size: 0.9rem; margin-top: 0.3rem;'>Prix/m² médian</div>
 				</div>
 				""",
 				unsafe_allow_html=True,

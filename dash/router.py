@@ -28,9 +28,9 @@ def render_app():
     pages = ["Accueil", "Transactions", "Prix", "Carte", "Recherche", "À propos"]
 
     # Bouton pour revenir à la splash screen
-    col1, col2, col3 = st.columns([0.1, 0.8, 0.1])
-    with col1:
-        if st.button("🏠", help="Retour à l'accueil"):
+    col1, col2, col3 = st.columns([1, 6, 1])
+    with col2:
+        if st.button("Revenir à la page d'accueil", help="Retour à l'accueil", use_container_width=True):
             st.session_state.show_splash = True
             st.rerun()
 

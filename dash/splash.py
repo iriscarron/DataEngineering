@@ -169,7 +169,7 @@ def render_splash():
     col1, col2, col3 = st.columns([1.5, 1, 1.5])
     with col2:
         if st.button("Accéder au Dashboard", use_container_width=True, key="btn-start"):
-            st.session_state["nav"] = "Transactions"
+            st.session_state["nav"] = "Accueil"
             st.session_state["show_splash"] = False
             st.rerun()
 
