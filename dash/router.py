@@ -2,7 +2,7 @@
 
 import streamlit as st
 
-from dash import about, carte, home, navbar, setup, recherche, lexique, splash
+from dash import about, carte, home, navbar, setup, recherche, splash
 from dash import layout
 
 
@@ -25,7 +25,7 @@ def render_app():
         return
 
     # Navigation standard après la splash screen
-    pages = ["Accueil", "Transactions", "Prix", "Carte", "Recherche", "Lexique", "À propos"]
+    pages = ["Accueil", "Transactions", "Prix", "Carte", "Recherche", "À propos"]
 
     # Bouton pour revenir à la splash screen
     col1, col2, col3 = st.columns([0.1, 0.8, 0.1])
@@ -50,9 +50,7 @@ def render_app():
         home.render_prix(df)
     elif choix == "Carte":
         carte.render_carte(df)
-    elif choix == "Elastic Search":
+    elif choix == "Recherche":
         recherche.render_recherche(df)
-    elif choix == "Lexique":
-        lexique.render_lexique()
     elif choix == "À propos":
         about.render_about()
