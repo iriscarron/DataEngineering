@@ -7,6 +7,7 @@ from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
 
+# Utiliser localhost par défaut (marche sur Windows Docker)
 ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
 INDEX_NAME = "dvf_transactions"
 

@@ -53,7 +53,7 @@ def creer_session_http():
         total=5,
         backoff_factor=1,
         status_forcelist=[500, 502, 503, 504],
-        allowed_methods=["GET", "POST"] 
+        allowed_methods=["GET", "POST"]
     )
     adapter = TLSAdapter(max_retries=retry)
     session.mount("https://", adapter)
@@ -461,6 +461,14 @@ def indexer_elasticsearch(df):
     """
     try:
         from etl.elasticsearch_utils import attendre_elasticsearch, creer_index, indexer_transactions
+    except ImportError:
+        try:
+            from elasticsearch_utils import attendre_elasticsearch, creer_index, indexer_transactions
+        except ImportError as exc:
+            print(f"Module Elasticsearch non disponible: {exc}")
+            return
+
+    try:
 
         print("\n[4/4] Indexation Elasticsearch...")
         if attendre_elasticsearch(max_tentatives=10, delai=3):
@@ -468,8 +476,6 @@ def indexer_elasticsearch(df):
             indexer_transactions(df)
         else:
             print("Elasticsearch non disponible, indexation ignoree")
-    except ImportError:
-        print("Module Elasticsearch non disponible")
     except Exception as e:
         print(f"Erreur indexation Elasticsearch: {e}")
 

@@ -44,11 +44,11 @@ def apply_theme():
         }}
 
         /* Fond beige principal */
-        [data-testid="stAppViewContainer"] {{
+        body, .stApp, [data-testid="stApp"], [data-testid="stAppViewContainer"] {{
             background-color: #f5f1e8 !important;
         }}
 
-        [data-testid="stMainBlockContainer"] {{
+        [data-testid="stMain"], [data-testid="stMainBlockContainer"], section.main, .block-container {{
             background-color: #f5f1e8 !important;
         }}
 
