@@ -96,6 +96,35 @@ def verifier_connexion_base(retries=5, delay=3):
 
 
 
+def telecharger_geojson_arrondissements():
+    """Telecharge le GeoJSON des arrondissements de Paris si absent."""
+    geojson_path = os.path.join(os.path.dirname(__file__), "data", "arrondissements-paris.geojson")
+
+    if os.path.exists(geojson_path):
+        print("GeoJSON des arrondissements deja present.")
+        return True
+
+    print("Telechargement du GeoJSON des arrondissements de Paris...")
+    url = "https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/arrondissements/exports/geojson"
+
+    try:
+        import requests
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        # Creer le dossier data si necessaire
+        os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
+
+        with open(geojson_path, "w", encoding="utf-8") as f:
+            f.write(response.text)
+
+        print(f"GeoJSON telecharge: {geojson_path}")
+        return True
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"Echec du telechargement du GeoJSON: {exc}")
+        return False
+
+
 def lancer_scraping():
     """Lance le scraping des donnees DVF."""
     print("Pas de donnees en base, lancement du scraping...")
@@ -111,6 +140,9 @@ def lancer_scraping():
 if __name__ == "__main__" and "streamlit" not in sys.modules:
     ensure_db_driver()
     lancer_docker_compose()
+
+    # Telecharger le GeoJSON des arrondissements si absent
+    telecharger_geojson_arrondissements()
 
     if not verifier_connexion_base():
         sys.exit(1)

@@ -6,15 +6,13 @@ import streamlit as st
 def render_splash():
     """Affiche la page d'accueil interactive avec description et navigation."""
 
-    query_params = {}
+    # Recuperer le parametre nav de l'URL
+    nav_param = ""
     if hasattr(st, "query_params"):
-        query_params = dict(st.query_params)
+        nav_param = st.query_params.get("nav", "")
     else:
-        query_params = st.experimental_get_query_params()
-
-    nav_param = query_params.get("nav", [""])
-    if isinstance(nav_param, list):
-        nav_param = nav_param[0] if nav_param else ""
+        params = st.experimental_get_query_params()
+        nav_param = params.get("nav", [""])[0]
 
     if nav_param in {"Accueil", "Transactions", "Prix", "Carte", "Recherche", "À propos"}:
         if hasattr(st, "query_params"):
@@ -74,9 +72,9 @@ def render_splash():
         "</div>",
     ]), unsafe_allow_html=True)
 
-    # Cartes explicatives alignées avec leurs boutons
-    row1_col1, row1_col2, row1_col3 = st.columns(3)
-    with row1_col1:
+    # Cartes explicatives centrees avec padding
+    pad1, col1, col2, col3, pad2 = st.columns([1, 2, 2, 2, 1])
+    with col1:
         st.markdown("\n".join([
             "<form class='landing-card-form' method='get'>",
             "<input type='hidden' name='nav' value='Accueil' />",
@@ -92,7 +90,7 @@ def render_splash():
             "</form>",
         ]), unsafe_allow_html=True)
 
-    with row1_col2:
+    with col2:
         st.markdown("\n".join([
             "<form class='landing-card-form' method='get'>",
             "<input type='hidden' name='nav' value='Transactions' />",
@@ -108,7 +106,7 @@ def render_splash():
             "</form>",
         ]), unsafe_allow_html=True)
 
-    with row1_col3:
+    with col3:
         st.markdown("\n".join([
             "<form class='landing-card-form' method='get'>",
             "<input type='hidden' name='nav' value='Prix' />",
@@ -124,8 +122,8 @@ def render_splash():
             "</form>",
         ]), unsafe_allow_html=True)
 
-    row2_col1, row2_col2, row2_col3 = st.columns(3)
-    with row2_col1:
+    pad3, col4, col5, col6, pad4 = st.columns([1, 2, 2, 2, 1])
+    with col4:
         st.markdown("\n".join([
             "<form class='landing-card-form' method='get'>",
             "<input type='hidden' name='nav' value='Carte' />",
@@ -141,7 +139,7 @@ def render_splash():
             "</form>",
         ]), unsafe_allow_html=True)
 
-    with row2_col2:
+    with col5:
         st.markdown("\n".join([
             "<form class='landing-card-form' method='get'>",
             "<input type='hidden' name='nav' value='Recherche' />",
@@ -157,7 +155,7 @@ def render_splash():
             "</form>",
         ]), unsafe_allow_html=True)
 
-    with row2_col3:
+    with col6:
         st.markdown("\n".join([
             "<form class='landing-card-form' method='get'>",
             "<input type='hidden' name='nav' value='À propos' />",

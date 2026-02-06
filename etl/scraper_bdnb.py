@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Scraper BDNB - Base de Donnees Nationale des Batiments
 Recupere les informations des batiments depuis l'API BDNB
@@ -13,7 +12,6 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from datetime import datetime
 
-# URLs des APIs
 BDNB_API_URL = "https://api.bdnb.io/v1/bdnb/donnees/batiment_groupe_complet"
 RNB_API_URL = "https://rnb-api.beta.gouv.fr/api/alpha/buildings"
 
@@ -135,22 +133,17 @@ def transformer_donnees_bdnb(batiments):
     records = []
 
     for bat in batiments:
-        # Extraire le premier id_parcelle de la liste
         parcelles = bat.get("l_parcelle_id", [])
         id_parcelle = parcelles[0] if parcelles else None
 
-        # Extraire les coordonnees du centroide
         geom = bat.get("geom_groupe")
         lat, lon = None, None
         if geom and geom.get("coordinates"):
             try:
-                # MultiPolygon - calculer le centroide approximatif
                 coords = geom["coordinates"][0][0]  # Premier anneau du premier polygone
                 if coords:
                     lons = [c[0] for c in coords]
                     lats = [c[1] for c in coords]
-                    # Convertir de Lambert 93 (EPSG:2154) vers WGS84 si necessaire
-                    # Pour l'instant on garde les coords brutes
             except (IndexError, TypeError):
                 pass
 

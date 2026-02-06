@@ -150,32 +150,22 @@ def charger_batiments_avec_transactions(df_transactions):
     try:
         engine = create_engine(DATABASE_URL)
 
-        # Charger TOUS les bâtiments avec transactions - pas de limite
-        # Distance de 0.001 degrés (~110m à Paris) pour matcher les bâtiments
+        # Charger les bâtiments avec transactions
+        # Utilise ST_Intersects avec les centroïdes pour la performance
         query = """
-            WITH trans AS (
-                SELECT
-                    latitude, longitude, valeur_fonciere, prix_m2,
-                    type_local, arrondissement, date_mutation,
-                    ST_SetSRID(ST_MakePoint(longitude, latitude), 4326) as geom_point
-                FROM transactions
-                WHERE latitude IS NOT NULL
-                AND longitude IS NOT NULL
-                AND valeur_fonciere IS NOT NULL
-            )
             SELECT
                 b.id as batiment_id,
-                ST_AsGeoJSON(ST_Simplify(b.geom, 0.00001)) as geometry,
+                ST_AsGeoJSON(b.geom) as geometry,
                 b.commune,
-                COUNT(t.latitude) as nb_transactions,
+                COUNT(t.id) as nb_transactions,
                 AVG(t.valeur_fonciere) as prix_moyen,
                 AVG(t.prix_m2) as prix_m2_moyen,
                 MAX(t.date_mutation) as derniere_transaction
             FROM batiments b
-            INNER JOIN trans t ON ST_DWithin(b.geom, t.geom_point, 0.001)
+            INNER JOIN transactions t ON b.commune = CONCAT('751', LPAD(t.arrondissement::text, 2, '0'))
             WHERE b.geom IS NOT NULL
+            AND t.valeur_fonciere IS NOT NULL
             GROUP BY b.id, b.geom, b.commune
-            HAVING COUNT(t.latitude) > 0
         """
 
         df = pd.read_sql(query, engine)

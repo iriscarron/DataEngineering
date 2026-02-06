@@ -35,12 +35,10 @@ def render_carte(df):
         # option d'affichage
         niveau_detail = st.selectbox(
             "Niveau de détail",
-            ["Arrondissements", "Bâtiments", "Points"],
+            ["Arrondissements", "Bâtiments"],
             index=0,
-            help="Arrondissements: vue globale, Bâtiments: polygones individuels, Points: transactions précises"
+            help="Arrondissements: vue globale, Bâtiments: polygones individuels"
         )
-
-        color_by_display = "Prix au m²"
 
         if niveau_detail == "Arrondissements":
             # Vue par arrondissements avec polygones (choroplèthe)
@@ -175,43 +173,3 @@ def render_carte(df):
 
             styliser_fig(fig)
             st.plotly_chart(fig, use_container_width=True, key="map_batiments")
-
-        else:  # niveau_detail == "Points"
-            # Vue par points de transaction
-            color_by = {
-                "Arrondissement": "arrondissement",
-                "Prix au m²": "prix_m2",
-                "Type de bien": "type_local",
-                "Type de vente": "nature_mutation"
-            }[color_by_display]
-
-            kwargs = {
-                "data_frame": df_map,
-                "lat": "latitude",
-                "lon": "longitude",
-                "hover_name": "type_local",
-                "hover_data": {
-                    "valeur_fonciere": ":,.0f",
-                    "prix_m2": ":,.0f",
-                    "surface_reelle_bati": ":.0f",
-                    "arrondissement": True,
-                    "date_mutation": True,
-                    "latitude": False,
-                    "longitude": False
-                },
-                "zoom": 11.5,
-                "title": f"{len(df_map):,} transactions géolocalisées à paris",
-                "height": 700,
-            }
-            if color_by == "prix_m2":
-                kwargs["color"] = "prix_m2"
-                kwargs["color_continuous_scale"] = "Viridis"
-            else:
-                kwargs["color"] = color_by
-                kwargs["color_discrete_sequence"] = px.colors.sequential.PuBuGn
-
-            fig = px.scatter_mapbox(**kwargs)
-            fig.update_layout(mapbox_style="carto-positron")
-            fig.update_traces(marker={"size": 8, "opacity": 0.6})
-            styliser_fig(fig)
-            st.plotly_chart(fig, use_container_width=True)
