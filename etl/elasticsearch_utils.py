@@ -118,7 +118,7 @@ def indexer_transactions(df):
                     "nature_mutation": str(row.get("nature_mutation", "")),
                     "code_postal": str(row.get("code_postal", "")),
                     "arrondissement": str(row.get("arrondissement", "")),
-                    "recherche_complete": f"{row.get('type_local', '')} {row.get('nature_mutation', '')} {row.get('arrondissement', '')}eme arrondissement Paris {row.get('code_postal', '')}"
+                    "recherche_complete": f"{row.get('type_local', '')} {row.get('nature_mutation', '')} {row.get('arrondissement', '')} {row.get('arrondissement', '')}e {row.get('arrondissement', '')}eme {row.get('arrondissement', '')}ème arrondissement Paris {row.get('code_postal', '')}"
                 }
             }
 
@@ -134,6 +134,29 @@ def indexer_transactions(df):
     succes, erreurs = bulk(es, generer_documents(), raise_on_error=False)
     print(f"Indexation terminee: {succes} documents indexes, {len(erreurs) if erreurs else 0} erreurs")
     return succes
+
+
+def extraire_arrondissement(query):
+    """
+    Extrait le numero d'arrondissement d'une requete.
+    Detecte: 14e, 14eme, 14ème, 1er, 1e, etc.
+    Retourne (arrondissement, query_nettoyee) ou (None, query)
+    """
+    import re
+    # Pattern pour detecter les arrondissements (1-20)
+    # (?<!\d) = pas précédé d'un chiffre, (?!\w) = pas suivi d'un caractère mot
+    pattern = r'(?<!\d)(20|1[0-9]|[1-9])\s*(e|è|ème|eme|er|ère|re|ième|ieme)(?!\w)'
+    match = re.search(pattern, query, re.IGNORECASE)
+
+    if match:
+        arr_num = match.group(1)  # Le groupe 1 capture directement le numéro
+        # Verifier que c'est un arrondissement valide (1-20)
+        if 1 <= int(arr_num) <= 20:
+            # Retirer l'arrondissement de la query
+            query_clean = re.sub(pattern, ' ', query, flags=re.IGNORECASE)
+            query_clean = re.sub(r'\s+', ' ', query_clean).strip()
+            return arr_num, query_clean
+    return None, query
 
 
 def rechercher_transactions(query, filtres=None, taille=100):
@@ -153,11 +176,17 @@ def rechercher_transactions(query, filtres=None, taille=100):
     must_clauses = []
     filter_clauses = []
 
+    # Extraire l'arrondissement de la requete si present
+    arr_detecte, query_nettoyee = extraire_arrondissement(query or "")
+    if arr_detecte:
+        filter_clauses.append({"term": {"arrondissement": arr_detecte}})
+        query = query_nettoyee  # Utiliser la query sans l'arrondissement
+
     if query and query.strip():
         must_clauses.append({
             "multi_match": {
                 "query": query,
-                "fields": ["recherche_complete^3", "type_local^2", "nature_mutation", "arrondissement"],
+                "fields": ["recherche_complete^3", "type_local^2", "nature_mutation"],
                 "fuzziness": "AUTO"
             }
         })

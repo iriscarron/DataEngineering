@@ -5,8 +5,74 @@ Page de recherche Elasticsearch avec interface visuelle optimale
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from etl.elasticsearch_utils import rechercher_transactions, elasticsearch_disponible
+import re
 from dash.layout import styliser_fig, SECONDARY_COLOR
+from etl.elasticsearch_utils import elasticsearch_disponible, get_es_client, INDEX_NAME
+
+
+def rechercher_avec_arrondissement(query, filtres=None, taille=100):
+    """Recherche avec detection automatique de l'arrondissement."""
+    es = get_es_client()
+
+    must_clauses = []
+    filter_clauses = []
+
+    query_originale = query  # DEBUG
+
+    # Detecter l'arrondissement dans la query
+    # Pattern amélioré: gère 1-20, tous les suffixes (e, ème, er, etc.)
+    # (?<!\d) = pas précédé d'un chiffre, (?!\w) = pas suivi d'un caractère mot
+    pattern = r'(?<!\d)(20|1[0-9]|[1-9])\s*(e|è|ème|eme|er|ère|re|ième|ieme)(?!\w)'
+    match = re.search(pattern, query or "", re.IGNORECASE)
+
+    arr_detecte = None  # DEBUG
+    if match:
+        arr_num = match.group(1)  # Le groupe 1 capture directement le numéro
+        if 1 <= int(arr_num) <= 20:
+            arr_detecte = arr_num  # DEBUG
+            # Ajouter filtre arrondissement
+            filter_clauses.append({"term": {"arrondissement": arr_num}})
+            # Retirer l'arrondissement de la query
+            query = re.sub(pattern, ' ', query, flags=re.IGNORECASE).strip()
+            # Nettoyer les espaces multiples
+            query = re.sub(r'\s+', ' ', query).strip()
+
+    # DEBUG - Afficher dans Streamlit
+    st.caption(f"DEBUG: Query='{query_originale}' | Arr={arr_detecte} | Texte='{query}' | Filtres={filter_clauses}")
+
+    if query and query.strip():
+        must_clauses.append({
+            "multi_match": {
+                "query": query,
+                "fields": ["recherche_complete^3", "type_local^2", "nature_mutation"],
+                "fuzziness": "AUTO"
+            }
+        })
+
+    if filtres:
+        if filtres.get("prix_max") is not None:
+            filter_clauses.append({"range": {"valeur_fonciere": {"lte": filtres["prix_max"]}}})
+
+    if not must_clauses and not filter_clauses:
+        body = {"query": {"match_all": {}}, "size": taille}
+    else:
+        body = {
+            "query": {
+                "bool": {
+                    "must": must_clauses if must_clauses else [{"match_all": {}}],
+                    "filter": filter_clauses
+                }
+            },
+            "size": taille,
+            "sort": [{"date_mutation": "desc"}]
+        }
+
+    try:
+        response = es.search(index=INDEX_NAME, body=body)
+        return [hit["_source"] for hit in response["hits"]["hits"]]
+    except Exception as e:
+        st.error(f"Erreur recherche: {e}")
+        return []
 
 
 def render_recherche(_df):
@@ -18,7 +84,7 @@ def render_recherche(_df):
 					padding: 2rem; border-radius: 16px; margin-bottom: 2rem;
 					border: 1px solid #8b7355; box-shadow: 0 4px 16px rgba(61, 40, 23, 0.35);'>
 			<h2 style='color: #e6dcc8; margin: 0; font-size: 2rem;'>
-				Recherche Intelligente
+				RECHERCHE TEST 12345
 			</h2>
 			<p style='color: #d6c6a8; margin-top: 0.5rem; font-size: 1.1rem;'>
 				Moteur de recherche Elasticsearch avec recherche floue et filtres avancés
@@ -64,9 +130,17 @@ def render_recherche(_df):
 		)
 
     if rechercher or query:
+        # DEBUG VISIBLE
+        st.error(f"DEBUG QUERY: '{query}'")
+
         with st.spinner("Recherche en cours dans Elasticsearch..."):
             filtres = {"prix_max": budget_max} if budget_max else None
-            resultats = rechercher_transactions(query or "", filtres=filtres, taille=100)
+            resultats = rechercher_avec_arrondissement(query or "", filtres=filtres, taille=100)
+
+        # DEBUG VISIBLE
+        if resultats:
+            arrs = list(set([r.get('arrondissement') for r in resultats[:10]]))
+            st.error(f"DEBUG RESULTATS: {len(resultats)} resultats, arrondissements: {arrs}")
 
         if not resultats:
             st.warning("Aucun résultat trouvé. Essayez une autre recherche.")
@@ -246,6 +320,15 @@ def render_recherche(_df):
                 st.plotly_chart(fig, use_container_width=True)
 
         with tab3:
+            # Extraire lat/lon depuis le champ coordonnees (geo_point Elasticsearch)
+            if "coordonnees" in df_resultats.columns:
+                df_resultats["latitude"] = df_resultats["coordonnees"].apply(
+                    lambda x: x.get("lat") if isinstance(x, dict) else None
+                )
+                df_resultats["longitude"] = df_resultats["coordonnees"].apply(
+                    lambda x: x.get("lon") if isinstance(x, dict) else None
+                )
+
             if "latitude" in df_resultats.columns and "longitude" in df_resultats.columns:
                 df_geo = df_resultats.dropna(subset=["latitude", "longitude"])
             else:

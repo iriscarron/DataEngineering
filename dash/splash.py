@@ -56,14 +56,21 @@ def render_splash():
     # Description du dashboard
     st.markdown("\n".join([
         "<div class='landing-description'>",
-        "<strong>Bienvenue dans le Dashboard des transactions immobilières à Paris — votre analyse complète du marché immobilier parisien.",
+        "<strong>Bonjour !</strong>",
         "<br><br>",
-        "Ce dashboard vous permet d'explorer les données de transactions immobilières à Paris avec des visualisations",
-        "interactives et puissantes. Découvrez les tendances des prix au fil du temps, analysez les volumes de ventes",
-        "par arrondissement et période, et identifiez les opportunités du marché avec nos cartes et graphiques dynamiques.",
+        "Ce dashboard permet de visualiser les ventes immobilieres a Paris.",
         "<br><br>",
-        "<strong>Les données proviennent de :</strong> la base DVF (Demandes de Valeurs Foncières) publiée par la",
-        "Direction Générale des Finances Publiques, et du cadastre français.",
+        "Vous pouvez :",
+        "<br>",
+        "- Voir l'evolution des prix par arrondissement",
+        "<br>",
+        "- Explorer les transactions sur une carte",
+        "<br>",
+        "- Rechercher des biens specifiques",
+        "<br>",
+        "- Comparer les prix au m2",
+        "<br><br>",
+        "<em>Donnees : base DVF (Demandes de Valeurs Foncieres) et cadastre francais.</em>",
         "</div>",
     ]), unsafe_allow_html=True)
 
