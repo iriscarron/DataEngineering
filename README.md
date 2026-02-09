@@ -1,327 +1,220 @@
-# DVF Paris - Analyse des Transactions Immobilieres
+# DVF Paris : Analyse des Transactions Immobilières
 
-Projet de Data Engineering pour le scraping, stockage et visualisation des donnees DVF (Demandes de Valeurs Foncieres) de Paris.
+Projet réalisé par **Iris Carron** et **Cléo Detrez**, étudiantes en école d'ingénieurs, dans le cadre de l'unité Data Engineering (2025/2026).
 
-## Presentation du Projet
+## Pourquoi ce projet
 
-Cette application permet d'analyser les transactions immobilieres des 20 arrondissements de Paris. Elle collecte les donnees depuis l'API DVF+ du Cerema, les stocke dans une base PostgreSQL, les indexe dans Elasticsearch pour la recherche, et les affiche via un dashboard Streamlit interactif.
+Le marché immobilier parisien est l'un des plus dynamiques et complexes de France. Les prix varient fortement d'un arrondissement à l'autre, d'un type de bien à l'autre, et évoluent au fil du temps. Pourtant, ces données restent difficilement exploitables en l'état : elles sont dispersées sur des plateformes institutionnelles, volumineuses, et peu lisibles pour un utilisateur non technique.
 
-### Fonctionnalites principales
+Nous avons choisi de scraper les données de l'API DVF+ du Cerema, qui expose les Demandes de Valeurs Foncières (transactions immobilières enregistrées par l'administration fiscale) pour l'ensemble du territoire français. Notre périmètre se concentre sur les 20 arrondissements de Paris.
 
-- Scraping automatique des donnees DVF au lancement
-- Stockage relationnel dans PostgreSQL avec extension PostGIS
-- Moteur de recherche avance avec Elasticsearch
-- Dashboard interactif avec filtres multiples
-- Carte choroplethe par arrondissement
-- Carte des transactions individuelles
-- 7 types de visualisations analytiques
+L'objectif est de proposer une application web complète qui collecte ces données automatiquement, les stocke dans une base de données, et les restitue sous forme de visualisations interactives : graphiques, cartes, indicateurs de synthèse et moteur de recherche. L'utilisateur peut ainsi explorer le marché parisien, comparer les prix entre arrondissements, observer les tendances, et rechercher des transactions spécifiques sans manipuler de données brutes.
 
-## Architecture Technique
+Le projet met en pratique l'ensemble des concepts abordés pendant l'unité : scraping de données depuis une source web, stockage en base de données relationnelle, création d'une application web en Python, affichage optimisé des données, conteneurisation des services avec Docker. Le scraping s'effectue en temps réel au lancement du projet, l'orchestration des services repose sur Docker Compose, et un moteur de recherche Elasticsearch est intégré pour la recherche avancée.
+
+## Origine des données
+
+Les données scrapées proviennent de l'API DVF+ du Cerema. Le Cerema (Centre d'études et d'expertise sur les risques, l'environnement, la mobilité et l'aménagement) met à disposition cette API au dessus de la base DVF publiée par la Direction Générale des Finances Publiques (DGFiP). La base DVF recense l'ensemble des transactions immobilières réalisées en France : prix de vente, date, type de bien, surface, nombre de pièces et localisation. Elle est mise à jour deux fois par an (avril et octobre) et disponible en open data sous licence ouverte Etalab.
+
+L'API expose deux points d'accès que notre scraper utilise.
+
+**Le point d'accès "mutations"** renvoie les données tabulaires de chaque transaction : prix, date, surface, type de bien, arrondissement, etc. C'est le point d'accès utilisé par défaut au lancement de l'application.
+
+**Le point d'accès "géomutations"** renvoie les mêmes informations enrichies des géométries cadastrales des parcelles concernées (polygones GeoJSON). Ces géométries permettent de calculer les coordonnées GPS précises de chaque transaction et d'afficher les contours réels des bâtiments sur la carte. Ce point d'accès est plus lent à interroger car les réponses sont beaucoup plus volumineuses.
+
+En complément, les contours géographiques des 20 arrondissements de Paris sont téléchargés depuis la plateforme Open Data de la Ville de Paris (opendata.paris.fr) sous forme de GeoJSON, et servent à l'affichage de la carte choroplèthe.
+
+## Scraping et temps de collecte
+
+Le scraping s'effectue automatiquement au lancement de l'application si la base de données est vide. Le scraper interroge l'API DVF+ pour chacun des 20 arrondissements de Paris (codes INSEE 75101 à 75120), en paginant automatiquement les résultats par lots de 500. Un mécanisme de retry avec backoff exponentiel gère les erreurs réseau.
+
+Il existe deux modes de scraping.
+
+**Mode standard (par défaut).** Le scraper interroge le point d'accès "mutations". Les coordonnées GPS de chaque transaction sont approximées à partir du centre géographique de l'arrondissement correspondant. Ce mode prend environ **5 à 15 minutes** selon la période couverte et la qualité de la connexion internet.
+
+**Mode avec géométries (option --geo).** Le scraper interroge le point d'accès "géomutations". Les coordonnées GPS sont calculées précisément à partir du centroïde du polygone cadastral de chaque parcelle, et les géométries sont stockées en base pour être affichées sur la carte. Ce mode est **beaucoup plus long** : il faut compter **30 minutes à plus d'une heure** pour une collecte complète, car les réponses contenant les géométries sont significativement plus volumineuses. En revanche, il est indispensable pour exploiter la vue "Bâtiments" de la page Carte, qui affiche les polygones réels des immeubles.
+
+Dans les deux cas, la collecte est suivie d'une phase de transformation (calcul du prix au m², nettoyage des valeurs aberrantes, normalisation des champs), puis du chargement en base PostgreSQL et de l'indexation dans Elasticsearch.
+
+## Architecture du projet
 
 ```
 Projet_data_engineering/
 │
-├── main.py                      # Point d'entree de l'application
-├── docker-compose.yml           # Orchestration Docker (PostgreSQL + Elasticsearch)
-├── requirements.txt             # Dependances Python (streamlit, pandas, sqlalchemy, elasticsearch, etc.)
-├── README.md                    # Documentation
+├── main.py                     Point d'entrée de l'application
+├── docker-compose.yml          Orchestration des services
+├── requirements.txt            Dépendances Python
 │
-├── dash/                        # Application Streamlit multi-pages
-│   ├── router.py                # Routeur principal (navigation, selection pages)
-│   ├── layout.py                # Configuration theme et utilities
-│   ├── navbar.py                # Barre de navigation
-│   ├── splash.py                # Page d'accueil (landing page avec 6 bulles)
-│   ├── home.py                  # Page Accueil (grid 2x2 d'info)
-│   ├── recherche.py             # Page Recherche (Elasticsearch full-text search)
-│   ├── carte.py                 # Page Carte (choropleth + markers)
-│   ├── prix.py                  # Page Prix (statistiques et graphiques)
-│   ├── lexique.py               # Page A propos / Lexique
-│   ├── simplepage.py            # Composants reutilisables
-│   └── setup.py                 # Configuration Streamlit
+├── dash/                       Interface Streamlit multi-pages
+│   ├── router.py               Routeur principal et navigation
+│   ├── layout.py               Thème, utilitaires et chargement des données
+│   ├── navbar.py               Barre de navigation
+│   ├── splash.py               Page d'accueil
+│   ├── home.py                 Pages Accueil, Transactions et Prix
+│   ├── recherche.py            Moteur de recherche Elasticsearch
+│   ├── carte.py                Cartes choroplèthe et bâtiments
+│   └── setup.py                Configuration Streamlit
 │
-├── etl/                         # Pipeline ETL
-│   ├── scraper.py               # Pipeline complet (API → PostgreSQL → Elasticsearch)
-│   ├── elasticsearch_utils.py   # Module Elasticsearch (indexation, recherche)
-│   ├── download.py              # Telechargement CSV (alternatif)
-│   └── clean_load.py            # Nettoyage CSV (alternatif)
+├── etl/                        Pipeline ETL (scraping, transformation, chargement)
+│   ├── scraper.py              Scraper API DVF+ et pipeline complet
+│   ├── elasticsearch_utils.py  Indexation et recherche Elasticsearch
+│   └── clean_load.py           Nettoyage des données
 │
 ├── docker/
-│   ├── Dockerfile               # Image de l'application
-│   ├── entrypoint.sh            # Script de demarrage
-│   └── init-db.sql              # Schema de la base de donnees
+│   ├── Dockerfile              Image de l'application
+│   ├── entrypoint.sh           Script de démarrage (lance le scraping puis Streamlit)
+│   └── init-db.sql             Schéma de la base de données
 │
-└── data/                        # Donnees brutes (si telechargement CSV)
+└── data/                       GeoJSON des arrondissements
 ```
 
-## Stack Technique
+## Stack technique
 
 | Composant | Technologie | Version |
-|-----------|-------------|---------|
+|---|---|---|
 | Langage | Python | 3.11 |
-| Application Web | Streamlit | >= 1.30 |
-| Base de donnees | PostgreSQL + PostGIS | 16 |
+| Interface web | Streamlit | 1.30+ |
+| Base de données | PostgreSQL avec PostGIS | 16 |
 | Moteur de recherche | Elasticsearch | 8.11 |
-| Visualisation | Plotly | >= 5.18 |
-| Containerisation | Docker + docker-compose | - |
-| Source de donnees | API DVF+ Cerema | - |
-
-## Pre-requis
-
-- Docker et docker-compose installes
-- 4 Go de RAM minimum (Elasticsearch necessite de la memoire)
-- Connexion internet (pour le scraping et les cartes)
-
-## Installation et Lancement
-
-### Methode recommandee : Docker Compose
-
-```bash
-# Cloner le repository
-git clone <url-du-repo>
-cd Projet_data_engineering
-
-# Lancer tous les services
-docker-compose up --build
-```
-
-L'application sera accessible sur **http://localhost:8501**
-
-Le premier lancement prend quelques minutes car :
-1. Les images Docker sont telechargees
-2. Elasticsearch demarre (30-60 secondes)
-3. Les donnees sont scrapees depuis l'API (~5-10 minutes selon la periode)
-4. Les donnees sont indexees dans Elasticsearch
-
-### Methode alternative : Installation locale
-
-```bash
-# Installer les dependances
-pip install -r requirements.txt
-
-# Demarrer PostgreSQL et Elasticsearch localement
-# (voir docker-compose.yml pour la configuration)
-
-# Lancer le scraper
-python etl/scraper.py
-
-# Lancer l'application
-streamlit run main.py
-```
-
-## Services Docker
-
-| Service | Port | Description |
-|---------|------|-------------|
-| app | 8501 | Dashboard Streamlit |
-| db | 5432 | PostgreSQL + PostGIS |
-| elasticsearch | 9200 | Moteur de recherche |
-
-## Configuration
-
-Variables d'environnement (definies dans docker-compose.yml) :
-
-| Variable | Description | Valeur par defaut |
-|----------|-------------|-------------------|
-| DATABASE_URL | Connexion PostgreSQL | postgresql://dvf:dvf@db:5432/dvf |
-| ELASTICSEARCH_URL | URL Elasticsearch | http://elasticsearch:9200 |
-
-**Note** : Depuis le code Python (scraper sur Windows), utiliser `http://localhost:9200` ou `http://127.0.0.1:9200`.
-
-### Configuration Streamlit
-
-Definie dans `dash/setup.py` :
-- Page config en mode "wide" (layout)
-- Titre : "DVF Paris - Dashboard Immobilier"
-- Theme couleurs : Beige/Marron (#f5f1e8, #3d2817, #8B7355)
-- Navigation multi-pages avec splash screen
-
-## Pages du Dashboard
-
-### 1. **Splash Screen** (Page d'accueil)
-- Page de bienvenue avec 6 bulles de navigation
-- Navigation directe vers chaque section
-- Design beige/marron elegant
-
-### 2. **Accueil** (Home)
-- Grid 2x2 de cartes d'information
-- Types d'habitation Paris
-- Types de vente
-- Indicateurs cles
-- Source des donnees
-
-### 3. **Recherche** (Recherche)
-- Moteur de recherche Elasticsearch avec autocomplete
-- Recherche textuelle ("appartement 16eme", "maison 5 pieces")
-- Filtres multiples :
-  - Arrondissement
-  - Type de bien
-  - Plage de prix
-- Affichage des resultats avec details complets
-
-### 4. **Carte** (Carte)
-- **Carte choroplethe** : Prix median au m2 par arrondissement (coloree)
-- **Carte des transactions** : Points individuels avec details au survol
-- Filtres par arrondissement et type
-
-### 5. **Prix** (Prix)
-- Statistiques et analyses de prix
-- Graphiques analytiques :
-  - Timeline des transactions par mois
-  - Prix median par arrondissement
-  - Evolution des prix dans le temps
-  - Distribution du prix au m2 (boxplot)
-  - Prix par type de bien
-- Filtres par periode et arrondissements
-
-### 6. **À propos** (À propos)
-- Lexique des termes DVF
-- Definitions des concepts immobiliers
-- Information sur les sources
-
-### Indicateurs cles (KPIs)
-- Nombre total de transactions
-- Prix moyen des transactions
-- Prix median au m2
-- Surface moyenne
+| Visualisation | Plotly | 5.18+ |
+| Traitement de données | Pandas, NumPy | 2.0+, 1.25+ |
+| ORM | SQLAlchemy | 2.0+ |
+| Conteneurisation | Docker et Docker Compose | |
+| Source scrapée | API DVF+ Cerema | |
 
 ## Pipeline ETL
 
-Le pipeline ETL s'execute automatiquement au demarrage :
+Le pipeline s'exécute automatiquement au premier lancement. Il se décompose en quatre étapes.
 
-```
-[1/4] Scraping API DVF+ Cerema
-      └─> Recuperation des mutations pour les 20 arrondissements
-      └─> Pagination automatique (500 resultats/page)
-      └─> Gestion des erreurs et retry
+**Étape 1 : Scraping.** Les données sont scrapées depuis l'API DVF+ du Cerema pour chacun des 20 arrondissements. La pagination est gérée automatiquement (500 résultats par page) avec retry et backoff exponentiel en cas d'erreur. Le scraper parcourt séquentiellement chaque arrondissement et accumule les résultats.
 
-[2/4] Transformation des donnees
-      └─> Mapping des champs API vers schema BDD
-      └─> Calcul du prix au m2
-      └─> Generation des coordonnees GPS
-      └─> Nettoyage des valeurs manquantes
+**Étape 2 : Transformation.** Les champs issus de l'API sont mappés vers le schéma de la base de données. Le prix au mètre carré est calculé à partir de la valeur foncière et de la surface bâtie. Les coordonnées GPS sont extraites (centroïde des parcelles en mode géo, ou approximation en mode standard). Les enregistrements sans prix ou sans date sont écartés.
 
-[3/4] Chargement PostgreSQL
-      └─> Insertion par lots de 1000 enregistrements
-      └─> Tables indexees pour les requetes
+**Étape 3 : Chargement en base.** Les enregistrements sont insérés par lots de 1000 dans PostgreSQL. Six index sont créés sur les colonnes les plus interrogées (date, arrondissement, type de bien, nature de mutation, prix, identifiant de mutation) pour garantir la réactivité du dashboard.
 
-[4/4] Indexation Elasticsearch
-      └─> Creation de l'index avec mapping
-      └─> Indexation en bulk des transactions
-      └─> Champs optimises pour la recherche
-```
+**Étape 4 : Indexation Elasticsearch.** Les transactions sont indexées en bulk dans Elasticsearch avec un mapping optimisé pour la recherche textuelle en français. Un champ composite `recherche_complete` regroupe l'ensemble des informations recherchables pour permettre la recherche floue.
 
-## Source des Donnees
+## Pages du dashboard
 
-Les donnees proviennent de l'API DVF+ du Cerema :
-- **URL** : https://apidf-preprod.cerema.fr/dvf_opendata/mutations/
-- **Documentation** : https://datafoncier.cerema.fr
-- **Mise a jour** : 2 fois par an (avril et octobre)
-- **Couverture** : Transactions immobilieres en France
+Le dashboard est organisé en six pages, chacune répondant à un besoin précis d'exploration des données.
 
-## Schema de la Base de Donnees
+**Page d'accueil.** C'est la première page affichée à l'ouverture de l'application. Elle présente brièvement le projet et propose six cartes de navigation qui mènent directement aux différentes sections du dashboard. Son rôle est d'orienter l'utilisateur et de lui donner une vue d'ensemble des fonctionnalités disponibles.
+
+**Accueil (lexique).** Cette page fait office de guide pour l'utilisateur. Elle explique les termes utilisés dans le dashboard sous forme de quatre cartes thématiques : les types d'habitation (appartement, maison, dépendance, local industriel), les types de vente (vente classique, VEFA, adjudication, expropriation), les indicateurs clés (valeur foncière, prix au m², surface, nombre de pièces) et les sources de données. Elle permet à un utilisateur non spécialiste de l'immobilier de comprendre les données présentées dans les autres pages.
+
+**Transactions.** Cette page sert à analyser le volume et la nature des transactions immobilières. Elle affiche cinq indicateurs de synthèse en haut de page : nombre total de transactions, prix moyen, prix médian au m², surface moyenne, et nombre de grosses ventes dans le top 5%. En dessous, trois graphiques complètent l'analyse : un histogramme de l'évolution mensuelle du volume de transactions (pour repérer les périodes d'activité), un diagramme circulaire de la répartition par type de mutation (vente classique, VEFA, adjudication, etc.), et un nuage de points des transactions les plus importantes colorées par arrondissement (pour identifier les ventes exceptionnelles). Des filtres dans la colonne de gauche permettent de restreindre la période, les arrondissements, les types de bien et la tranche de prix.
+
+**Prix.** Cette page est dédiée à l'analyse comparative des prix. Elle présente quatre indicateurs statistiques (prix minimum, premier quartile, troisième quartile, prix maximum) puis quatre graphiques : le prix médian de vente par arrondissement (pour comparer les arrondissements entre eux), l'évolution mensuelle du prix médian au m² (pour observer la tendance du marché), la distribution statistique du prix au m² par arrondissement sous forme de boîtes à moustaches (pour visualiser la dispersion et les valeurs atypiques), et le prix médian selon le type de bien (pour comparer appartements, maisons, locaux commerciaux, etc.). Les mêmes filtres que la page Transactions sont disponibles.
+
+**Carte.** Cette page offre deux modes de visualisation géographique, sélectionnables via un menu déroulant. Le mode "Arrondissements" affiche une carte choroplèthe de Paris colorée selon le prix moyen au m² dans chaque arrondissement ; le survol de chaque zone indique le nombre de transactions, le prix au m² et le prix moyen. Le mode "Bâtiments" affiche les polygones cadastraux individuels des immeubles ayant fait l'objet d'une transaction, colorés selon leur prix moyen au m². Ce second mode n'est disponible que si les données ont été scrapées avec l'option géométries (mode --geo décrit plus haut), car il nécessite les polygones cadastraux.
+
+**Recherche.** Cette page exploite le moteur de recherche Elasticsearch pour permettre une recherche en texte libre parmi les transactions. L'utilisateur saisit une requête en langage naturel, par exemple "appartement 16ème" ou "maison 5 pièces". Le système détecte automatiquement le numéro d'arrondissement dans la requête et l'applique comme filtre. Un champ budget maximum permet de borner les résultats par prix. Les résultats sont présentés sous trois onglets : une liste détaillée des 20 premières transactions avec prix et caractéristiques, des graphiques analytiques (répartition par arrondissement, distribution des prix, prix par type de bien), et une carte de localisation des résultats. Quatre indicateurs (nombre de résultats, prix moyen, prix médian au m², surface moyenne) synthétisent les résultats en haut de page.
+
+## Schéma de la base de données
 
 Table `transactions` :
 
 | Colonne | Type | Description |
-|---------|------|-------------|
+|---|---|---|
 | id | SERIAL | Identifiant unique |
-| id_mutation | VARCHAR | ID mutation DVF |
+| id_mutation | VARCHAR | Identifiant de la mutation DVF |
 | date_mutation | DATE | Date de la transaction |
-| valeur_fonciere | NUMERIC | Prix de vente |
-| surface_reelle_bati | NUMERIC | Surface en m2 |
-| prix_m2 | NUMERIC | Prix au m2 calcule |
-| nb_pieces | INTEGER | Nombre de pieces |
-| type_local | VARCHAR | Type de bien |
-| nature_mutation | VARCHAR | Type de vente |
+| valeur_fonciere | NUMERIC | Prix de vente en euros |
+| surface_reelle_bati | NUMERIC | Surface en m² |
+| prix_m2 | NUMERIC | Prix au m² calculé |
+| nb_pieces | INTEGER | Nombre de pièces |
+| type_local | VARCHAR | Type de bien (appartement, maison, etc.) |
+| nature_mutation | VARCHAR | Nature de la vente |
 | code_postal | VARCHAR | Code postal |
-| arrondissement | VARCHAR | Numero d'arrondissement |
-| latitude | NUMERIC | Coordonnee GPS |
-| longitude | NUMERIC | Coordonnee GPS |
-| scraped_at | TIMESTAMP | Date de scraping |
+| arrondissement | VARCHAR | Numéro d'arrondissement |
+| latitude | NUMERIC | Coordonnée GPS |
+| longitude | NUMERIC | Coordonnée GPS |
+| geom_json | TEXT | Géométrie cadastrale de la parcelle (mode géo uniquement) |
+| scraped_at | TIMESTAMP | Date de collecte |
 
-## Developpement
+## Prérequis
 
-### Relancer le scraping manuellement
+L'application nécessite Docker et Docker Compose installés sur la machine. Un minimum de 4 Go de RAM est recommandé, Elasticsearch étant gourmand en mémoire. Une connexion internet est requise pour le scraping des données et l'affichage des fonds de carte.
+
+## Installation et lancement
+
+### Lancement standard avec Docker Compose
 
 ```bash
-# Depuis le container
-docker-compose exec app python etl/scraper.py
-
-# Ou localement
-python etl/scraper.py
+git clone <url-du-repo>
+cd Projet_data_engineering
+docker-compose up --build
 ```
 
-### Reinitialiser les donnees
+L'application est ensuite accessible à l'adresse **http://localhost:8501**.
+
+Au premier lancement, les images Docker sont téléchargées, Elasticsearch démarre (30 à 60 secondes), puis le scraping des données se lance automatiquement. Cette étape prend **5 à 15 minutes** car l'API est interrogée pour chacun des 20 arrondissements de Paris avec pagination automatique. Une fois le scraping terminé, le dashboard Streamlit se lance et les données sont consultables.
+
+### Lancement avec données géographiques complètes
+
+Pour bénéficier de la vue "Bâtiments" sur la page Carte, il faut lancer le scraper avec l'option --geo. Cette collecte est significativement plus longue (**30 minutes à plus d'une heure**) car elle récupère les géométries cadastrales de chaque parcelle en plus des données de transaction.
 
 ```bash
-# Supprimer les volumes et relancer
+docker-compose up -d db elasticsearch
+python etl/scraper.py --geo
+streamlit run main.py
+```
+
+### Services
+
+| Service | Port | Description |
+|---|---|---|
+| Application Streamlit | 8501 | Dashboard interactif |
+| PostgreSQL avec PostGIS | 5432 | Base de données relationnelle |
+| Elasticsearch | 9200 | Moteur de recherche |
+
+## Variables d'environnement
+
+| Variable | Description | Valeur par défaut |
+|---|---|---|
+| DATABASE_URL | Chaîne de connexion PostgreSQL | postgresql://dvf:dvf@db:5432/dvf |
+| ELASTICSEARCH_URL | URL du service Elasticsearch | http://elasticsearch:9200 |
+
+En exécution locale (hors Docker), remplacer les noms de services par `localhost`.
+
+## Commandes utiles
+
+Relancer le scraping manuellement (mode standard) :
+
+```bash
+docker-compose exec app python etl/scraper.py
+```
+
+Relancer le scraping avec géométries cadastrales :
+
+```bash
+docker-compose exec app python etl/scraper.py --geo
+```
+
+Réinitialiser l'ensemble des données et relancer :
+
+```bash
 docker-compose down -v
 docker-compose up --build
 ```
 
-### Acceder a PostgreSQL
+Accéder directement à la base PostgreSQL :
 
 ```bash
 docker-compose exec db psql -U dvf -d dvf
-
-# Exemple : Compter les transactions
-SELECT COUNT(*) FROM transactions;
-
-# Voir la structure
-\dt
-\d transactions
 ```
 
-## Troubleshooting
+## Sources des données
 
-### Elasticsearch n'est pas disponible
+| Ressource | Lien |
+|---|---|
+| API DVF+ Cerema (source scrapée) | https://apidf-preprod.cerema.fr/dvf_opendata/mutations/ |
+| Documentation DVF Cerema | https://datafoncier.cerema.fr |
+| Open Data Paris (contours des arrondissements) | https://opendata.paris.fr |
+| Base DVF (DGFiP) | Licence Ouverte Etalab |
 
-**Symptôme** : Message "Elasticsearch non disponible ou l'index est vide" sur la page Recherche
+## Auteures
 
-**Solution** :
-1. Verifier que Docker tourne : `docker ps`
-2. Relancer Docker Compose si needed : `docker-compose down && docker-compose up -d`
-3. Attendre 30-60 secondes le temps qu'Elasticsearch démarre
-4. Lancer le scraper : `python etl/scraper.py`
-5. Verifier la connexion : voir section "Verifier Elasticsearch" ci-dessus
+**Iris Carron** et **Cléo Detrez**
 
-### Scraper se connecte mais n'indexe pas
-
-**Solution** :
-- Verifier que le container Elasticsearch est "healthy" : `docker-compose ps`
-- Les logsdu container : `docker-compose logs elasticsearch`
-
-### La page Recherche reste vide apres le scraper
-
-- Attendre que le scraper finisse complètement (voir "Scraping termine!" dans les logs)
-- Rafraichir la page Streamlit (F5)
-
-## Notes de Conception
-
-### Palette de couleurs
-- Primaire : Beige #f5f1e8, #f3e7d6
-- Secondaire : Marron #3d2817, #5b3a22, #8B7355
-- Accent : Or/Bronze #c8ac88
-- Gradient cartes : De #f3e7d6 (clair) à #dfc8a8 (moyen)
-
-### Donnees actuelles
-- **Periode** : 2020-2024
-- **Zone** : Paris (20 arrondissements)
-- **Nb transactions** : ~204,000
-- **Source** : API DVF+ Cerema
-- **Maj** : 2 fois par an (avril / octobre)
-
-## Auteurs
-
-Projet realise dans le cadre de l'unite Data Engineering.
-
-**Contributeurs** : Iris Carron, Cléo Detrez
-
-**Periode de realisation** : 2025-2026
-
-## Licence
-
-Donnees DVF : Licence Ouverte / Open Licence (Etalab)
-
-- Documentation DVF : https://datafoncier.cerema.fr
-- API DVF+ : https://apidf-preprod.cerema.fr/dvf_opendata/mutations/
+Projet réalisé dans le cadre de l'unité Data Engineering, année universitaire 2025/2026.
