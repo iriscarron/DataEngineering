@@ -15,6 +15,8 @@ __pycache__/
 /data/*
 !/data/.gitkeep
 !/data/arrondissements-paris.geojson
+!/data/cadastre/
+!/data/cadastre/cadastre-75-batiments.json.gz
 
 # streamlit
 .streamlit/

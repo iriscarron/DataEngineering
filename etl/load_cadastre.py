@@ -1,5 +1,6 @@
 """Charge les données cadastrales des bâtiments de Paris dans PostgreSQL."""
 
+import gzip
 import json
 import os
 from sqlalchemy import create_engine, text
@@ -37,8 +38,14 @@ def load_batiments():
         conn.commit()
 
     print("Chargement du fichier GeoJSON...")
-    with open("data/cadastre/cadastre-75-batiments.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
+    gz_path = "data/cadastre/cadastre-75-batiments.json.gz"
+    json_path = "data/cadastre/cadastre-75-batiments.json"
+    if os.path.exists(gz_path):
+        with gzip.open(gz_path, "rt", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
     features = data["features"]
     print(f"Insertion de {len(features):,} bâtiments...")
