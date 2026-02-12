@@ -24,6 +24,7 @@ except Exception as e:
 if [ $? -eq 1 ]; then
     echo "demarrage du scraping DVF+..."
     python etl/scraper.py
+    python etl/scraper_bdnb.py #limite de batiment à changer ici, peut aller jusqu'à 50 000 pour les plus courageux.
 fi
 
 echo "lancement de l'application streamlit..."
