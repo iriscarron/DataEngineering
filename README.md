@@ -4,6 +4,10 @@ Projet réalisé par **Iris Carron** et **Cléo Detrez**, étudiantes en école 
 
 Application web qui scrape automatiquement les transactions immobilières parisiennes et les bâtiments, les stocke en base de données, et les restitue sous forme de visualisations interactives : graphiques, cartes choroplèthes, indicateurs de synthèse et moteur de recherche Elasticsearch.
 
+---
+
+# Guide utilisateur
+
 ## Prérequis
 
 Docker et Docker Compose installés sur la machine. Un minimum de 4 Go de RAM est recommandé (Elasticsearch est gourmand en mémoire). Une connexion internet est requise pour le scraping des données.
@@ -39,65 +43,67 @@ Il est possible de charger les bâtiments depuis le fichier cadastral inclus dan
 docker-compose exec app python etl/load_cadastre.py
 ```
 
-A noter que le chargement de 110 000 bâtiments rend l'affichage de la carte en mode "Bâtiments" plus long à charger.
+Nous ne conseillons pas cette approche car le chargement de 110 000 bâtiments rend l'affichage de la carte tres long. Le scraping via l'API BDNB est limité à 3 000 bâtiments par défaut mais cette valeur peut être augmentée dans `etl/scraper_bdnb.py`.
 
-### Services
+## Commandes utiles
 
-| Service | Port | Description |
-|---|---|---|
-| Application Streamlit | 8501 | Dashboard interactif |
-| PostgreSQL avec PostGIS | 5432 | Base de données relationnelle |
-| Elasticsearch | 9200 | Moteur de recherche |
+Relancer le scraping des transactions :
 
-## Stack technique
+```bash
+docker-compose exec app python etl/scraper.py
+```
 
-| Composant | Technologie | Version |
-|---|---|---|
-| Langage | Python | 3.11 |
-| Interface web | Streamlit | 1.30+ |
-| Base de données | PostgreSQL avec PostGIS | 16 |
-| Moteur de recherche | Elasticsearch | 8.11 |
-| Visualisation | Plotly | 5.18+ |
-| Traitement de données | Pandas, NumPy | 2.0+, 1.25+ |
-| ORM | SQLAlchemy | 2.0+ |
-| Conteneurisation | Docker et Docker Compose | |
-| Sources scrapées | API DVF+ Cerema, API BDNB | |
+Relancer le scraping des bâtiments :
 
-## Architecture du projet
+```bash
+docker-compose exec app python etl/scraper_bdnb.py
+```
+
+Accéder directement à la base PostgreSQL :
+
+```bash
+docker-compose exec db psql -U dvf -d dvf
+```
+
+---
+
+# Guide développeur
+
+## Structure du projet
 
 ```
 Projet_data_engineering/
 │
-├── main.py                     Point d'entrée de l'application
-├── docker-compose.yml          Orchestration des services
+├── main.py                     Point d'entrée
+├── docker-compose.yml          Orchestration des 3 services
 ├── requirements.txt            Dépendances Python
 │
-├── dash/                       Interface Streamlit multi-pages
-│   ├── router.py               Routeur principal et navigation
-│   ├── layout.py               Thème, utilitaires et chargement des données
+├── dash/                       Interface Streamlit
+│   ├── router.py               Routage des pages
+│   ├── layout.py               Filtres, chargement des données, utilitaires
 │   ├── navbar.py               Barre de navigation
 │   ├── splash.py               Page d'accueil
-│   ├── home.py                 Pages Accueil, Transactions et Prix
-│   ├── recherche.py            Moteur de recherche Elasticsearch
-│   ├── carte.py                Cartes choroplèthe et bâtiments
+│   ├── home.py                 Pages Transactions et Prix
+│   ├── recherche.py            Recherche Elasticsearch
+│   ├── carte.py                Cartes choroplèthes
 │   └── setup.py                Configuration Streamlit
 │
-├── etl/                        Pipeline ETL (scraping, transformation, chargement)
-│   ├── scraper.py              Scraper API DVF+ et pipeline complet
-│   ├── scraper_bdnb.py         Scraper API BDNB (bâtiments)
-│   ├── load_cadastre.py        Chargement des bâtiments cadastraux
-│   ├── elasticsearch_utils.py  Indexation et recherche Elasticsearch
+├── etl/                        Pipeline ETL
+│   ├── scraper.py              Scraping API DVF+ (transactions)
+│   ├── scraper_bdnb.py         Scraping API BDNB (bâtiments)
+│   ├── load_cadastre.py        Chargement cadastre local
+│   ├── elasticsearch_utils.py  Indexation Elasticsearch
 │   └── clean_load.py           Nettoyage des données
 │
 ├── docker/
-│   ├── Dockerfile              Image de l'application
-│   ├── entrypoint.sh           Script de démarrage (lance le scraping puis Streamlit)
-│   └── init-db.sql             Schéma de la base de données
+│   ├── Dockerfile              Image Python 3.11
+│   ├── entrypoint.sh           Scraping auto puis lancement Streamlit
+│   └── init-db.sql             Création de la table transactions
 │
-└── data/                       GeoJSON des arrondissements
+└── data/                       GeoJSON et cadastre
 ```
 
-### Diagramme d'architecture
+## Architecture
 
 ```mermaid
 graph TD
@@ -136,53 +142,12 @@ graph TD
     PAGES -->|http://localhost:8501| USER[Utilisateur]
 ```
 
-## Pipeline ETL
+## Fonctionnalités et interactions
 
-Le pipeline s'exécute automatiquement au premier lancement. Il se décompose en cinq étapes.
-
-**Étape 1 : Scraping des transactions.** Les données sont scrapées depuis l'API DVF+ du Cerema pour chacun des 20 arrondissements. La pagination est gérée automatiquement (500 résultats par page) avec retry et backoff exponentiel en cas d'erreur. Le scraper parcourt séquentiellement chaque arrondissement et accumule les résultats.
-
-**Étape 2 : Transformation.** Les champs issus de l'API sont mappés vers le schéma de la base de données. Le prix au mètre carré est calculé à partir de la valeur foncière et de la surface bâtie. Les coordonnées GPS sont extraites. Les enregistrements sans prix ou sans date sont écartés.
-
-**Étape 3 : Chargement en base.** Les enregistrements sont insérés par lots de 1000 dans PostgreSQL. Six index sont créés sur les colonnes les plus interrogées (date, arrondissement, type de bien, nature de mutation, prix, identifiant de mutation) pour garantir la réactivité du dashboard.
-
-**Étape 4 : Indexation Elasticsearch.** Les transactions sont indexées en bulk dans Elasticsearch avec un mapping optimisé pour la recherche textuelle en français. Un champ composite `recherche_complete` regroupe l'ensemble des informations recherchables pour permettre la recherche floue.
-
-**Étape 5 : Scraping des bâtiments.** Les géométries des bâtiments parisiens sont scrapées depuis l'API BDNB par lots de 10 (limite imposée par l'API). Les géométries GeoJSON sont converties en objets PostGIS pour permettre les jointures spatiales avec les transactions. La limite de bâtiments collectés est configurable dans `etl/scraper_bdnb.py`.
-
-## Pages du dashboard
-
-Le dashboard est organisé en six pages, chacune répondant à un besoin précis d'exploration des données.
-
-**Page d'accueil.** C'est la première page affichée à l'ouverture de l'application. Elle présente brièvement le projet et propose six cartes de navigation qui mènent directement aux différentes sections du dashboard. Son rôle est d'orienter l'utilisateur et de lui donner une vue d'ensemble des fonctionnalités disponibles.
-
-![Accueil - Titre](screenshots/accueiltitre.png)
-
-![Accueil - Boutons de navigation](screenshots/accueilboutons.png)
-
-**Accueil.** Cette page fait office de guide pour l'utilisateur. Elle explique les termes utilisés dans le dashboard sous forme de quatre cartes thématiques : les types d'habitation (appartement, maison, dépendance, local industriel), les types de vente (vente classique, VEFA, adjudication, expropriation), les indicateurs clés (valeur foncière, prix au m², surface, nombre de pièces) et les sources de données. Elle permet à un utilisateur non spécialiste de l'immobilier de comprendre les données présentées dans les autres pages.
-
-![Accueil - Onglets informatifs](screenshots/accueilonglet.png)
-
-**Transactions.** Cette page sert à analyser le volume et la nature des transactions immobilières. Elle affiche cinq indicateurs de synthèse en haut de page : nombre total de transactions, prix moyen, prix médian au m², surface moyenne, et nombre de grosses ventes dans le top 5%. En dessous, trois graphiques complètent l'analyse : un histogramme de l'évolution mensuelle du volume de transactions (pour repérer les périodes d'activité), un diagramme circulaire de la répartition par type de mutation (vente classique, VEFA, adjudication, etc.), et un nuage de points des transactions les plus importantes colorées par arrondissement (pour identifier les ventes exceptionnelles). Des filtres dans la colonne de gauche permettent de restreindre la période, les arrondissements, les types de bien et la tranche de prix.
-
-![Transactions - Analyse du volume](screenshots/transactions.png)
-
-**Prix.** Cette page est dédiée à l'analyse comparative des prix. Elle présente quatre indicateurs statistiques (prix minimum, premier quartile, troisième quartile, prix maximum) puis quatre graphiques : le prix médian de vente par arrondissement (pour comparer les arrondissements entre eux), l'évolution mensuelle du prix médian au m² (pour observer la tendance du marché), la distribution statistique du prix au m² par arrondissement sous forme de boîtes à moustaches (pour visualiser la dispersion et les valeurs atypiques), et le prix médian selon le type de bien (pour comparer appartements, maisons, locaux commerciaux, etc.). Les mêmes filtres que la page Transactions sont disponibles.
-
-![Prix - Analyse comparative](screenshots/prix.png)
-
-**Carte.** Cette page offre deux modes de visualisation géographique, sélectionnables via un menu déroulant. Le mode "Arrondissements" affiche une carte choroplèthe de Paris colorée selon le prix moyen au m² dans chaque arrondissement ; le survol de chaque zone indique le nombre de transactions, le prix au m² et le prix moyen. Le mode "Bâtiments" affiche les polygones individuels des immeubles ayant fait l'objet d'une transaction, colorés selon leur prix moyen au m². Pour chaque bâtiment, le prix au m² est calculé en faisant la moyenne de toutes les transactions situées à proximité. Les mêmes filtres (années, arrondissements, type de bien, prix) s'appliquent aux deux modes.
-
-![Carte - Vue par arrondissements](screenshots/cartearrondissements.png)
-
-![Carte - Vue bâtiments](screenshots/cartefini.png)
-
-La capture ci-dessus montre le rendu de la vue "Bâtiments" avec une limite de 3 000 bâtiments scrapés depuis l'API BDNB (valeur par défaut). Cette limite est configurable dans le fichier `etl/scraper_bdnb.py` (variable `limit_total`). Il est possible de l'augmenter jusqu'à 50 000 pour couvrir davantage de bâtiments parisiens, au prix d'un temps de scraping plus long (l'API BDNB renvoie 10 résultats par requête).
-
-**Recherche.** Cette page exploite le moteur de recherche Elasticsearch pour permettre une recherche en texte libre parmi les transactions. L'utilisateur saisit une requête en langage naturel, par exemple "appartement 16ème" ou "maison 5 pièces". Le système détecte automatiquement le numéro d'arrondissement dans la requête et l'applique comme filtre. Un champ budget maximum permet de borner les résultats par prix. Les résultats sont présentés sous trois onglets : une liste détaillée des 20 premières transactions avec prix et caractéristiques, des graphiques analytiques (répartition par arrondissement, distribution des prix, prix par type de bien), et une carte de localisation des résultats. Quatre indicateurs (nombre de résultats, prix moyen, prix médian au m², surface moyenne) synthétisent les résultats en haut de page.
-
-![Recherche - Moteur de recherche](screenshots/recherche.png)
+- **Scraping automatique** : `entrypoint.sh` vérifie si la base est vide au démarrage. Si oui, il lance `scraper.py` (transactions DVF) puis `scraper_bdnb.py` (bâtiments BDNB) avant de démarrer Streamlit.
+- **Jointure spatiale** : les bâtiments sont liés aux transactions par proximité géographique (rayon de 200m) via PostGIS (`ST_DWithin`). Le prix au m² de chaque bâtiment est la moyenne des transactions proches.
+- **Recherche Elasticsearch** : les transactions sont indexées avec un mapping français et un champ composite pour la recherche floue. La détection d'arrondissement dans la requête est automatique.
+- **Filtres partagés** : les pages Transactions, Prix et Carte partagent les mêmes filtres (années, arrondissements, type de bien, prix) via `layout.render_filters_sidebar()`.
 
 ## Schéma de la base de données
 
@@ -228,25 +193,55 @@ Table `batiments` :
 
 En exécution locale (hors Docker), remplacer les noms de services par `localhost`.
 
-## Commandes utiles
+---
 
-Relancer le scraping des transactions :
+# Rapport d'analyse
 
-```bash
-docker-compose exec app python etl/scraper.py
-```
+Détail des pages du dashboard et des visualisations proposées.
 
-Relancer le scraping des bâtiments :
+## Page d'accueil
 
-```bash
-docker-compose exec app python etl/scraper_bdnb.py
-```
+C'est la première page affichée à l'ouverture de l'application. Elle présente brièvement le projet et propose six cartes de navigation qui mènent directement aux différentes sections du dashboard. Son rôle est d'orienter l'utilisateur et de lui donner une vue d'ensemble des fonctionnalités disponibles.
 
-Accéder directement à la base PostgreSQL :
+![Accueil - Titre](screenshots/accueiltitre.png)
 
-```bash
-docker-compose exec db psql -U dvf -d dvf
-```
+![Accueil - Boutons de navigation](screenshots/accueilboutons.png)
+
+## Accueil
+
+Cette page fait office de guide pour l'utilisateur. Elle explique les termes utilisés dans le dashboard sous forme de quatre cartes thématiques : les types d'habitation (appartement, maison, dépendance, local industriel), les types de vente (vente classique, VEFA, adjudication, expropriation), les indicateurs clés (valeur foncière, prix au m², surface, nombre de pièces) et les sources de données. Elle permet à un utilisateur non spécialiste de l'immobilier de comprendre les données présentées dans les autres pages.
+
+![Accueil - Onglets informatifs](screenshots/accueilonglet.png)
+
+## Transactions
+
+Cette page sert à analyser le volume et la nature des transactions immobilières. Elle affiche cinq indicateurs de synthèse en haut de page : nombre total de transactions, prix moyen, prix médian au m², surface moyenne, et nombre de grosses ventes dans le top 5%. En dessous, trois graphiques complètent l'analyse : un histogramme de l'évolution mensuelle du volume de transactions (pour repérer les périodes d'activité), un diagramme circulaire de la répartition par type de mutation (vente classique, VEFA, adjudication, etc.), et un nuage de points des transactions les plus importantes colorées par arrondissement (pour identifier les ventes exceptionnelles). Des filtres dans la colonne de gauche permettent de restreindre la période, les arrondissements, les types de bien et la tranche de prix.
+
+![Transactions - Analyse du volume](screenshots/transactions.png)
+
+## Prix
+
+Cette page est dédiée à l'analyse comparative des prix. Elle présente quatre indicateurs statistiques (prix minimum, premier quartile, troisième quartile, prix maximum) puis quatre graphiques : le prix médian de vente par arrondissement (pour comparer les arrondissements entre eux), l'évolution mensuelle du prix médian au m² (pour observer la tendance du marché), la distribution statistique du prix au m² par arrondissement sous forme de boîtes à moustaches (pour visualiser la dispersion et les valeurs atypiques), et le prix médian selon le type de bien (pour comparer appartements, maisons, locaux commerciaux, etc.). Les mêmes filtres que la page Transactions sont disponibles.
+
+![Prix - Analyse comparative](screenshots/prix.png)
+
+## Carte
+
+Cette page offre deux modes de visualisation géographique, sélectionnables via un menu déroulant. Le mode "Arrondissements" affiche une carte choroplèthe de Paris colorée selon le prix moyen au m² dans chaque arrondissement ; le survol de chaque zone indique le nombre de transactions, le prix au m² et le prix moyen. Le mode "Bâtiments" affiche les polygones individuels des immeubles ayant fait l'objet d'une transaction, colorés selon leur prix moyen au m². Pour chaque bâtiment, le prix au m² est calculé en faisant la moyenne de toutes les transactions situées à proximité. Les mêmes filtres (années, arrondissements, type de bien, prix) s'appliquent aux deux modes.
+
+![Carte - Vue par arrondissements](screenshots/cartearrondissements.png)
+
+![Carte - Vue bâtiments](screenshots/cartefini.png)
+
+La capture ci-dessus montre le rendu de la vue "Bâtiments" avec une limite de 3 000 bâtiments scrapés depuis l'API BDNB (valeur par défaut). Cette limite est configurable dans le fichier `etl/scraper_bdnb.py` (variable `limit_total`). Il est possible de l'augmenter jusqu'à 50 000 pour couvrir davantage de bâtiments parisiens, au prix d'un temps de scraping plus long (l'API BDNB renvoie 10 résultats par requête).
+
+## Recherche
+
+Cette page exploite le moteur de recherche Elasticsearch pour permettre une recherche en texte libre parmi les transactions. L'utilisateur saisit une requête en langage naturel, par exemple "appartement 16ème" ou "maison 5 pièces". Le système détecte automatiquement le numéro d'arrondissement dans la requête et l'applique comme filtre. Un champ budget maximum permet de borner les résultats par prix. Les résultats sont présentés sous trois onglets : une liste détaillée des 20 premières transactions avec prix et caractéristiques, des graphiques analytiques (répartition par arrondissement, distribution des prix, prix par type de bien), et une carte de localisation des résultats. Quatre indicateurs (nombre de résultats, prix moyen, prix médian au m², surface moyenne) synthétisent les résultats en haut de page.
+
+![Recherche - Moteur de recherche](screenshots/recherche.png)
+
+---
 
 ## Sources des données
 
