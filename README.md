@@ -28,13 +28,7 @@ En complément, les contours géographiques des 20 arrondissements de Paris sont
 
 Le scraping s'effectue automatiquement au lancement de l'application si la base de données est vide. Le scraper interroge l'API DVF+ pour chacun des 20 arrondissements de Paris (codes INSEE 75101 à 75120), en paginant automatiquement les résultats par lots de 500. Un mécanisme de retry avec backoff exponentiel gère les erreurs réseau.
 
-Il existe deux modes de scraping.
-
-**Mode standard (par défaut).** Le scraper interroge le point d'accès "mutations". Les coordonnées GPS de chaque transaction sont approximées à partir du centre géographique de l'arrondissement correspondant. Ce mode prend environ **5 à 15 minutes** selon la période couverte et la qualité de la connexion internet.
-
-**Mode avec géométries (option --geo).** Le scraper interroge le point d'accès "géomutations". Les coordonnées GPS sont calculées précisément à partir du centroïde du polygone cadastral de chaque parcelle, et les géométries sont stockées en base pour être affichées sur la carte. Ce mode est **beaucoup plus long** : il faut compter **30 minutes à plus d'une heure** pour une collecte complète, car les réponses contenant les géométries sont significativement plus volumineuses. En revanche, il est indispensable pour exploiter la vue "Bâtiments" de la page Carte, qui affiche les polygones réels des immeubles.
-
-Dans les deux cas, la collecte est suivie d'une phase de transformation (calcul du prix au m², nettoyage des valeurs aberrantes, normalisation des champs), puis du chargement en base PostgreSQL et de l'indexation dans Elasticsearch.
+Le scraping se déroule en deux phases. D'abord, les transactions immobilières sont collectées depuis l'API DVF+ du Cerema (**5 à 15 minutes**). Ensuite, les bâtiments sont collectés depuis l'API BDNB (**5 à 30 minutes** selon la limite configurée). La collecte est suivie d'une phase de transformation (calcul du prix au m², nettoyage des valeurs aberrantes, normalisation des champs), puis du chargement en base PostgreSQL et de l'indexation dans Elasticsearch.
 
 ## Architecture du projet
 
