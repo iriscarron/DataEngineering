@@ -2,7 +2,7 @@
 
 Projet réalisé par **Iris Carron** et **Cléo Detrez**, étudiantes en école d'ingénieurs, dans le cadre de l'unité Data Engineering (2025/2026).
 
-Application web qui scrape automatiquement les transactions immobilières parisiennes et les bâtiments, les stocke en base de données, et les restitue sous forme de visualisations interactives : graphiques, cartes choroplèthes, indicateurs de synthèse et moteur de recherche Elasticsearch.
+Le marché immobilier parisien est l'un des plus dynamiques de France, mais les données de transactions restent dispersées et difficilement exploitables. Ce projet propose une application web qui scrape automatiquement les transactions immobilières parisiennes (API DVF+ du Cerema) et les géométries des bâtiments (API BDNB), les stocke dans une base PostgreSQL/PostGIS, et les restitue sous forme de visualisations interactives : graphiques, cartes choroplèthes par arrondissement et par bâtiment, indicateurs de synthèse et moteur de recherche Elasticsearch. L'utilisateur peut explorer le marché parisien, comparer les prix entre arrondissements, observer les tendances et rechercher des transactions spécifiques.
 
 ---
 
