@@ -107,7 +107,7 @@ def render_carte(df):
                 st.warning("Aucun bâtiment avec transaction trouvé.")
                 return
 
-            st.info(f"{len(df_batiments):,} bâtiments avec {len(df_map):,} transactions")
+            st.info(f"{len(df_batiments):,} bâtiments avec transactions")
 
             # Créer le GeoJSON des bâtiments
             features = []
@@ -167,7 +167,7 @@ def render_carte(df):
                     center=dict(lat=48.856, lon=2.352),
                     zoom=11.5
                 ),
-                title=f"Bâtiments parisiens avec transactions immobilières ({len(df_batiments):,} bâtiments)",
+                title=f"Bâtiments parisiens avec transactions ({len(df_batiments):,} bâtiments)",
                 height=700,
             )
 

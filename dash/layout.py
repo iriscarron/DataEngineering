@@ -146,26 +146,43 @@ def charger_donnees():
 
 @st.cache_data(show_spinner=False, ttl=3600)
 def charger_batiments_avec_transactions(df_transactions):
-    """Charge TOUS les batiments de Paris avec leurs transactions - SANS LIMITE."""
+    """Charge tous les batiments avec UNE transaction proche maximum."""
     try:
+        from sqlalchemy import text
         engine = create_engine(DATABASE_URL)
 
-        # Charger les bâtiments avec transactions
-        # Utilise ST_Intersects avec les centroïdes pour la performance
+        # Charger tous les bâtiments + transaction la plus proche (1 par bâtiment max)
         query = """
+            WITH transactions_proches AS (
+                SELECT DISTINCT ON (b.id)
+                    b.id,
+                    t.valeur_fonciere,
+                    t.prix_m2,
+                    t.date_mutation
+                FROM batiments b
+                LEFT JOIN transactions t ON
+                    ST_DWithin(
+                        b.geom::geography,
+                        ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography,
+                        200
+                    )
+                    AND CAST(substring(b.commune from '([0-9]+)') AS INTEGER) = CAST(t.arrondissement AS INTEGER)
+                WHERE b.geom IS NOT NULL
+                    AND t.latitude IS NOT NULL
+                    AND t.longitude IS NOT NULL
+                ORDER BY b.id, t.date_mutation DESC
+            )
             SELECT
                 b.id as batiment_id,
                 ST_AsGeoJSON(b.geom) as geometry,
                 b.commune,
-                COUNT(t.id) as nb_transactions,
-                AVG(t.valeur_fonciere) as prix_moyen,
-                AVG(t.prix_m2) as prix_m2_moyen,
-                MAX(t.date_mutation) as derniere_transaction
+                CASE WHEN tp.valeur_fonciere IS NOT NULL THEN 1 ELSE 0 END as nb_transactions,
+                tp.valeur_fonciere as prix_moyen,
+                tp.prix_m2 as prix_m2_moyen,
+                tp.date_mutation as derniere_transaction
             FROM batiments b
-            INNER JOIN transactions t ON SUBSTRING(b.commune FROM 'Paris ([0-9]+)[er]') = t.arrondissement
+            LEFT JOIN transactions_proches tp ON b.id = tp.id
             WHERE b.geom IS NOT NULL
-            AND t.valeur_fonciere IS NOT NULL
-            GROUP BY b.id, b.geom, b.commune
         """
 
         df = pd.read_sql(query, engine)

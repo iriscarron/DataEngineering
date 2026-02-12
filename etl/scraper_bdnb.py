@@ -105,8 +105,12 @@ def get_batiments_par_departement(code_dept="75", limit=1000, offset=0, session=
         ])
     }
 
+    headers = {
+        "Prefer": "count=exact"
+    }
+
     try:
-        response = session.get(BDNB_API_URL, params=params, timeout=60)
+        response = session.get(BDNB_API_URL, params=params, headers=headers, timeout=60)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
@@ -187,9 +191,9 @@ def scraper_bdnb_paris(limit_total=50000):
 
     session = creer_session_http()
 
-    all_records = []
+    total_inseres = 0
     offset = 0
-    batch_size = 1000
+    batch_size = 10  # L'API BDNB limite strictement à 10 résultats
 
     while offset < limit_total:
         print(f"Recuperation batch {offset}-{offset+batch_size}...")
@@ -206,31 +210,45 @@ def scraper_bdnb_paris(limit_total=50000):
             break
 
         records = transformer_donnees_bdnb(batiments)
-        all_records.extend(records)
 
         print(f"  -> {len(batiments)} batiments recuperes")
+
+        # Inserer immediatement ce batch (evite les INSERT trop gros)
+        if records:
+            df = pd.DataFrame(records)
+
+            # Filtrer les doublons deja en base
+            with engine.connect() as conn:
+                ids_existants = pd.read_sql(
+                    text("SELECT batiment_groupe_id FROM batiments WHERE batiment_groupe_id = ANY(:ids)"),
+                    conn,
+                    params={"ids": df['batiment_groupe_id'].tolist()}
+                )
+
+            if len(ids_existants) > 0:
+                df = df[~df['batiment_groupe_id'].isin(ids_existants['batiment_groupe_id'])]
+                print(f"  -> {len(ids_existants)} doublons ignores")
+
+            if len(df) > 0:
+                df.to_sql(
+                    "batiments",
+                    engine,
+                    if_exists="append",
+                    index=False,
+                    method=None,  # INSERT ligne par ligne (plus lent mais plus fiable)
+                    chunksize=10
+                )
+                total_inseres += len(df)
+                print(f"  -> {len(df)} batiments inseres ({total_inseres} total)")
 
         offset += batch_size
         time.sleep(0.5)  # Rate limiting
 
-    # Inserer en base
-    if all_records:
-        df = pd.DataFrame(all_records)
-        print(f"\nInsertion de {len(df)} batiments en base...")
-
-        df.to_sql(
-            "batiments",
-            engine,
-            if_exists="append",
-            index=False,
-            method="multi",
-            chunksize=1000
-        )
-
-        print("Insertion terminee")
+    if total_inseres > 0:
+        print(f"\nInsertion terminee: {total_inseres} batiments")
 
         # Convertir geom_json en vraie géométrie PostGIS
-        print("Conversion des géométries JSON en PostGIS (2154 -> 4326)...")
+        print("\nConversion des géométries JSON en PostGIS (2154 -> 4326)...")
         with engine.connect() as conn:
             conn.execute(text("""
                 UPDATE batiments
@@ -301,8 +319,31 @@ def enrichir_parcelles_avec_bdnb():
 
 def run():
     """Execute le scraping complet"""
-    scraper_bdnb_paris(limit_total=50000)
+    scraper_bdnb_paris(limit_total=3000)
     # enrichir_parcelles_avec_bdnb()  # Table parcelles non créée
+
+    # Transformer les géométries de geom_json vers geom
+    print("\nTransformation des géométries...")
+    engine = create_engine(DATABASE_URL)
+    with engine.connect() as conn:
+        result = conn.execute(text(
+            "SELECT COUNT(*) FROM batiments WHERE geom_json IS NOT NULL AND geom IS NULL"
+        ))
+        nb_to_fix = result.fetchone()[0]
+        print(f"{nb_to_fix} bâtiments à transformer...")
+
+        conn.execute(text("""
+            UPDATE batiments
+            SET geom = ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(geom_json), 2154), 4326)
+            WHERE geom_json IS NOT NULL AND geom IS NULL
+        """))
+        conn.commit()
+
+        result = conn.execute(text(
+            "SELECT COUNT(*) FROM batiments WHERE geom IS NOT NULL"
+        ))
+        nb_with_geom = result.fetchone()[0]
+        print(f"{nb_with_geom} bâtiments avec géométrie")
 
 
 if __name__ == "__main__":
