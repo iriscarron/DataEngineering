@@ -192,7 +192,7 @@ def scraper_bdnb_paris(limit_total=50000):
 
     total_inseres = 0
     offset = 0
-    batch_size = 10  # L'API de BDNB limite strictement à 10 résultats
+    batch_size = 10
 
     while offset < limit_total:
         print(f"Recuperation batch {offset}-{offset+batch_size}...")

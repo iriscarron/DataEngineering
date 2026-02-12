@@ -6,7 +6,7 @@ import streamlit as st
 def render_lexique():
     """affiche le lexique des termes."""
 
-    # Types d'habitation
+    # types d'habitation
     st.markdown("""
     <div style='background-color: #D4A76A; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
         <h3 style='color: #fff; margin-top: 0;'>Types d'habitation</h3>
@@ -19,7 +19,7 @@ def render_lexique():
     </div>
     """, unsafe_allow_html=True)
 
-    # Types de vente
+    # types de vente
     st.markdown("""
     <div style='background-color: #A0826D; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
         <h3 style='color: #fff; margin-top: 0;'>Types de vente</h3>
@@ -33,7 +33,7 @@ def render_lexique():
     </div>
     """, unsafe_allow_html=True)
 
-    # Indicateurs
+    # indicateurs
     st.markdown("""
     <div style='background-color: #8B7355; padding: 20px; border-radius: 10px; margin-bottom: 20px;'>
         <h3 style='color: #fff; margin-top: 0;'>Indicateurs clés</h3>
@@ -47,7 +47,7 @@ def render_lexique():
     </div>
     """, unsafe_allow_html=True)
 
-    # Source des données
+    # source des données
     st.markdown("""
     <div style='background-color: #6B8E23; padding: 20px; border-radius: 10px;'>
         <h3 style='color: #fff; margin-top: 0;'>Source des données</h3>

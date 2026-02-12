@@ -104,7 +104,7 @@ def render_recherche(_df):
     with col_search:
         query = st.text_input(
 			"Rechercher une transaction",
-			placeholder="Ex: appartement 16eme, maison 5 pieces, local commercial...",
+			placeholder="Ex: appartement 16eme ou maison 5eme",
 			help="Recherche intelligente avec fuzzy matching et analyse en français",
 		)
 
@@ -396,7 +396,7 @@ def render_recherche(_df):
 					<div style='color: #d6c6a8; font-size: 0.9rem;'>
 						• appartement<br>
 						• maison<br>
-						• local commercial
+						• local industriel
 					</div>
 				</div>
 				""",

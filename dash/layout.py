@@ -151,41 +151,48 @@ def charger_batiments_avec_transactions(df_transactions):
         from sqlalchemy import text
         engine = create_engine(DATABASE_URL)
 
-        # Charger tous les bâtiments + transaction la plus proche (1 par bâtiment max)
-        query = """
-            WITH transactions_proches AS (
-                SELECT DISTINCT ON (b.id)
-                    b.id,
-                    t.valeur_fonciere,
-                    t.prix_m2,
-                    t.date_mutation
-                FROM batiments b
-                LEFT JOIN transactions t ON
-                    ST_DWithin(
-                        b.geom::geography,
-                        ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography,
-                        200
-                    )
-                    AND CAST(substring(b.commune from '([0-9]+)') AS INTEGER) = CAST(t.arrondissement AS INTEGER)
-                WHERE b.geom IS NOT NULL
-                    AND t.latitude IS NOT NULL
-                    AND t.longitude IS NOT NULL
-                ORDER BY b.id, t.date_mutation DESC
-            )
+        if df_transactions.empty:
+            return pd.DataFrame()
+
+        date_min = df_transactions["date_mutation"].min()
+        date_max = df_transactions["date_mutation"].max()
+        prix_min = float(df_transactions["valeur_fonciere"].min())
+        prix_max = float(df_transactions["valeur_fonciere"].max())
+        arrondissements = df_transactions["arrondissement"].dropna().unique().tolist()
+
+        query = text("""
             SELECT
                 b.id as batiment_id,
                 ST_AsGeoJSON(b.geom) as geometry,
                 b.commune,
-                CASE WHEN tp.valeur_fonciere IS NOT NULL THEN 1 ELSE 0 END as nb_transactions,
-                tp.valeur_fonciere as prix_moyen,
-                tp.prix_m2 as prix_m2_moyen,
-                tp.date_mutation as derniere_transaction
+                COUNT(t.id) as nb_transactions,
+                AVG(t.valeur_fonciere) as prix_moyen,
+                AVG(t.prix_m2) as prix_m2_moyen,
+                MAX(t.date_mutation) as derniere_transaction
             FROM batiments b
-            LEFT JOIN transactions_proches tp ON b.id = tp.id
+            INNER JOIN transactions t ON
+                ST_DWithin(
+                    b.geom::geography,
+                    ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography,
+                    200
+                )
+                AND CAST(substring(b.commune from '([0-9]+)') AS INTEGER) = CAST(t.arrondissement AS INTEGER)
             WHERE b.geom IS NOT NULL
-        """
+                AND t.latitude IS NOT NULL
+                AND t.longitude IS NOT NULL
+                AND t.date_mutation BETWEEN :date_min AND :date_max
+                AND t.valeur_fonciere BETWEEN :prix_min AND :prix_max
+                AND t.arrondissement = ANY(:arrondissements)
+            GROUP BY b.id, b.geom, b.commune
+        """)
 
-        df = pd.read_sql(query, engine)
+        df = pd.read_sql(query, engine, params={
+            "date_min": date_min,
+            "date_max": date_max,
+            "prix_min": prix_min,
+            "prix_max": prix_max,
+            "arrondissements": arrondissements,
+        })
         return df
     except Exception as e:  # pylint: disable=broad-except
         st.error(f"Erreur de chargement des bâtiments: {e}")

@@ -120,6 +120,10 @@ Le dashboard est organisé en six pages, chacune répondant à un besoin précis
 
 ![Carte - Vue par arrondissements](screenshots/cartearrondissements.png)
 
+![Carte - Vue bâtiments](screenshots/cartefini.png)
+
+La capture ci-dessus montre le rendu de la vue "Bâtiments" avec une limite de 3 000 bâtiments scrapés depuis l'API BDNB (valeur par défaut). Cette limite est configurable dans le fichier `etl/scraper_bdnb.py` (variable `limit_total`). Il est possible de l'augmenter jusqu'à 50 000 pour couvrir davantage de bâtiments parisiens, au prix d'un temps de scraping plus long (l'API BDNB renvoie 10 résultats par requête).
+
 **Recherche.** Cette page exploite le moteur de recherche Elasticsearch pour permettre une recherche en texte libre parmi les transactions. L'utilisateur saisit une requête en langage naturel, par exemple "appartement 16ème" ou "maison 5 pièces". Le système détecte automatiquement le numéro d'arrondissement dans la requête et l'applique comme filtre. Un champ budget maximum permet de borner les résultats par prix. Les résultats sont présentés sous trois onglets : une liste détaillée des 20 premières transactions avec prix et caractéristiques, des graphiques analytiques (répartition par arrondissement, distribution des prix, prix par type de bien), et une carte de localisation des résultats. Quatre indicateurs (nombre de résultats, prix moyen, prix médian au m², surface moyenne) synthétisent les résultats en haut de page.
 
 ![Recherche - Moteur de recherche](screenshots/recherche.png)
@@ -162,17 +166,18 @@ docker-compose up --build
 
 L'application est ensuite accessible à l'adresse **http://localhost:8501**.
 
-Au premier lancement, les images Docker sont téléchargées, Elasticsearch démarre (30 à 60 secondes), puis le scraping des données se lance automatiquement. Cette étape prend **5 à 15 minutes** car l'API est interrogée pour chacun des 20 arrondissements de Paris avec pagination automatique. Une fois le scraping terminé, le dashboard Streamlit se lance et les données sont consultables.
+Au premier lancement, les images Docker sont téléchargées, Elasticsearch démarre (30 à 60 secondes), puis le scraping se lance automatiquement en deux phases. D'abord, les transactions immobilières sont scrapées depuis l'API DVF+ du Cerema pour les 20 arrondissements (**5 à 15 minutes**). Ensuite, les bâtiments sont scrapés depuis l'API BDNB (**5 à 30 minutes** selon la limite configurée). Une fois le scraping terminé, le dashboard Streamlit se lance et les données sont consultables.
 
-### Lancement avec données géographiques complètes
+### Réinitialiser et relancer
 
-Pour bénéficier de la vue "Bâtiments" sur la page Carte, il faut lancer le scraper avec l'option --geo. Cette collecte est significativement plus longue (**30 minutes à plus d'une heure**) car elle récupère les géométries cadastrales de chaque parcelle en plus des données de transaction.
+Pour repartir de zéro (vider la base et relancer le scraping complet) :
 
 ```bash
-docker-compose up -d db elasticsearch
-python etl/scraper.py --geo
-streamlit run main.py
+docker-compose down -v
+docker-compose up --build
 ```
+
+La commande `down -v` supprime les containers et les volumes (base de données, index Elasticsearch). La commande `up --build` reconstruit l'image et relance l'ensemble du pipeline.
 
 ### Services
 
@@ -222,10 +227,12 @@ docker-compose exec db psql -U dvf -d dvf
 
 | Ressource | Lien |
 |---|---|
-| API DVF+ Cerema (source scrapée) | https://apidf-preprod.cerema.fr/dvf_opendata/mutations/ |
+| API DVF+ Cerema - mutations (source scrapée) | https://apidf-preprod.cerema.fr/dvf_opendata/mutations/ |
+| API DVF+ Cerema - géomutations (source scrapée) | https://apidf-preprod.cerema.fr/dvf_opendata/geomutations/ |
+| API BDNB - bâtiments (source scrapée) | https://api.bdnb.io/v1/bdnb/donnees/batiment_groupe_complet |
+| Open Data Paris - contours des arrondissements (téléchargé) | https://opendata.paris.fr/explore/dataset/arrondissements/export/ |
 | Documentation DVF Cerema | https://datafoncier.cerema.fr |
-| Open Data Paris (contours des arrondissements) | https://opendata.paris.fr |
-| Base DVF (DGFiP) | Licence Ouverte Etalab |
+| Documentation BDNB | https://bdnb.io |
 
 ## Auteures
 
