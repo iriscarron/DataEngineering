@@ -14,7 +14,7 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 
 def charger_cadastre(fichier_gz):
-    """Charge le fichier GeoJSON cadastre"""
+    """charge le fichier GeoJSON cadastre"""
     print(f"Chargement du cadastre depuis {fichier_gz}...")
 
     with gzip.open(fichier_gz, 'rt', encoding='utf-8') as f:
@@ -36,7 +36,7 @@ def charger_cadastre(fichier_gz):
 
 
 def charger_dvf(fichier_gz):
-    """Charge le fichier CSV DVF geolocalize"""
+    """charge le fichier CSV DVF geolocalize"""
     print(f"Chargement des DVF depuis {fichier_gz}...")
 
     with gzip.open(fichier_gz, 'rt', encoding='utf-8') as f:
@@ -47,11 +47,10 @@ def charger_dvf(fichier_gz):
 
 
 def fusionner_donnees(parcelles, df_dvf):
-    """Fusionne les parcelles cadastrales avec les transactions DVF"""
-    print("Fusion des donnees...")
+    """fusionne les parcelles cadastrales avec les transactions DVF"""
+    print("Fusion des donnees..!")
 
-    # Grouper les transactions par parcelle
-    dvf_par_parcelle = {}
+    dvf_par_parcelle = {}     # groupe les transactions par parcelle
     for _, row in df_dvf.iterrows():
         id_parcelle = row.get('id_parcelle')
         if pd.isna(id_parcelle):
@@ -76,21 +75,18 @@ def fusionner_donnees(parcelles, df_dvf):
 
     print(f"  -> {len(dvf_par_parcelle)} parcelles avec transactions")
 
-    # Creer les enregistrements finaux
     records = []
     for id_parcelle, info in parcelles.items():
         transactions = dvf_par_parcelle.get(id_parcelle, [])
 
-        # Prendre la derniere transaction si disponible
         if transactions:
-            # Trier par date et prendre la plus recente
+            # trie par date et prendre la plus recente
             transactions_valides = [t for t in transactions if t.get('valeur_fonciere')]
             if transactions_valides:
                 derniere = max(transactions_valides,
                               key=lambda x: x.get('date_mutation', '1900-01-01'))
 
-                # Calculer prix au m2
-                surface = derniere.get('surface_reelle_bati')
+                surface = derniere.get('surface_reelle_bati')   # calcule prix au m2
                 valeur = derniere.get('valeur_fonciere')
                 prix_m2 = valeur / surface if surface and surface > 0 else None
 
@@ -125,7 +121,6 @@ def fusionner_donnees(parcelles, df_dvf):
                     'has_transaction': False
                 }
         else:
-            # Parcelle sans transaction
             record = {
                 'id_parcelle': id_parcelle,
                 'geom_json': json.dumps(info['geometry']),
@@ -139,7 +134,6 @@ def fusionner_donnees(parcelles, df_dvf):
 
     df = pd.DataFrame(records)
 
-    # Extraire l'arrondissement du code commune
     df['arrondissement'] = df['commune'].apply(
         lambda x: str(int(str(x)[-2:])) if pd.notna(x) else None
     )
@@ -222,14 +216,11 @@ def run():
         print(f"ERREUR: Fichier DVF non trouve: {dvf_file}")
         return
 
-    # Charger les donnees
-    parcelles = charger_cadastre(cadastre_file)
+    parcelles = charger_cadastre(cadastre_file) #charge les donnes
     df_dvf = charger_dvf(dvf_file)
 
-    # Fusionner
-    df_final = fusionner_donnees(parcelles, df_dvf)
+    df_final = fusionner_donnees(parcelles, df_dvf) #fusionner
 
-    # Charger en base
     engine = create_engine(DATABASE_URL)
     creer_table_parcelles(engine)
     charger_en_bdd(df_final, engine)

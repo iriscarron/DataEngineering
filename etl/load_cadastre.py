@@ -13,11 +13,10 @@ def load_batiments():
 
     print("Création de la table batiments...")
     with engine.connect() as conn:
-        # Supprimer la table si elle existe
-        conn.execute(text("DROP TABLE IF EXISTS batiments CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS batiments CASCADE"))         # supp la table si elle existe
         conn.commit()
 
-        # Créer la table avec géométrie
+        # cree la table avec géométrie
         conn.execute(text("""
             CREATE TABLE batiments (
                 id SERIAL PRIMARY KEY,
@@ -31,7 +30,7 @@ def load_batiments():
         """))
         conn.commit()
 
-        # Créer un index spatial
+        # index spatiale
         conn.execute(text("""
             CREATE INDEX idx_batiments_geom ON batiments USING GIST(geom)
         """))
@@ -70,14 +69,13 @@ def load_batiments():
 
             conn.commit()
 
-    print("Création de l'index sur commune...")
+    print("création de l'index sur commune")
     with engine.connect() as conn:
         conn.execute(text("CREATE INDEX idx_batiments_commune ON batiments(commune)"))
         conn.commit()
 
-    print("✓ Chargement terminé !")
+    print("Chargement terminé")
 
-    # Statistiques
     with engine.connect() as conn:
         result = conn.execute(text("SELECT COUNT(*) FROM batiments"))
         count = result.scalar()

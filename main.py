@@ -13,11 +13,9 @@ from urllib.parse import urlparse
 def _normalize_db_url(url: str) -> str:
     parsed = urlparse(url)
     host = parsed.hostname or ""
-    # For exécution locale, force IPv4 loopback to éviter ::1 et les resets sur Windows
     if host == "localhost":
         url = url.replace("localhost", "127.0.0.1")
-    # Ajoute un connect_timeout pour éviter de bloquer trop longtemps
-    if "?" in url:
+    if "?" in url:     # Ajoute un connect_timeout pour éviter de bloquer trop longtemps
         if "connect_timeout" not in url:
             url += "&connect_timeout=5"
     else:
@@ -46,7 +44,7 @@ def verifier_donnees_existantes():
 
 
 def ensure_db_driver():
-    """S'assure que psycopg2 est install; installe psycopg2-binary si manquant en local."""
+    """S'assure que psycopg2 est installé; installe psycopg2-binary si manquant en local."""
     try:
         importlib.import_module("psycopg2")
         return
@@ -55,7 +53,7 @@ def ensure_db_driver():
     try:
         subprocess.run([sys.executable, "-m", "pip", "install", "psycopg2-binary"], check=True)
         importlib.import_module("psycopg2")
-        print("psycopg2-binary install")
+        print("psycopg2-binary installé")
     except Exception as exc:  # pylint: disable=broad-except
         print(f"Echec d'installation de psycopg2-binary: {exc}")
         sys.exit(1)
@@ -112,7 +110,6 @@ def telecharger_geojson_arrondissements():
         response = requests.get(url, timeout=30)
         response.raise_for_status()
 
-        # Creer le dossier data si necessaire
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
 
         with open(geojson_path, "w", encoding="utf-8") as f:
@@ -133,15 +130,11 @@ def lancer_scraping():
 
     run_scraper(annee_min="2023", annee_max="2024")
 
-
-
-
 # Si on lance avec "python main.py", on verifie les donnees et on lance Streamlit
 if __name__ == "__main__" and "streamlit" not in sys.modules:
     ensure_db_driver()
     lancer_docker_compose()
 
-    # Telecharger le GeoJSON des arrondissements si absent
     telecharger_geojson_arrondissements()
 
     if not verifier_connexion_base():
@@ -158,11 +151,8 @@ if __name__ == "__main__" and "streamlit" not in sys.modules:
     sys.exit(0)
 
 
-# A partir d'ici, c'est l'application Streamlit modularisee
 import streamlit as st
 from dash.router import render_app
-
-
 
 
 if __name__ == "__main__":

@@ -1,6 +1,5 @@
 """Page d'accueil et graphiques pour DVF Paris Analytics."""
 
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -9,15 +8,12 @@ from dash import layout
 from dash.layout import PRIMARY_COLOR, SECONDARY_COLOR, styliser_fig
 
 
-
-
 def _ensure_data(df):
-    """Vérifie que le DataFrame n'est pas vide et affiche un avertissement."""
+    """verif que le DataFrame n'est pas vide et affiche un avertissement."""
     if df.empty:
         st.warning("Aucune donnee disponible. Lancez d'abord le scraper.")
         return False
     return True
-
 
 
 
@@ -105,7 +101,7 @@ def graphique_timeline(df):
 
 
 def graphique_grosses_ventes(df, seuil_percentile=95):
-    """Scatter des grosses ventes (au-dessus d'un seuil percentile)."""
+    """scatter des grosses ventes (au-dessus d'un seuil percentile)."""
     if df.empty:
         return None
 
@@ -139,10 +135,8 @@ def graphique_grosses_ventes(df, seuil_percentile=95):
     return styliser_fig(fig)
 
 
-
-
 def graphique_prix_arrondissement(df):
-    """Bar chart du prix médian par arrondissement."""
+    """bar chart du prix médian par arrondissement."""
     if df.empty:
         return None
 
@@ -177,7 +171,7 @@ def graphique_prix_arrondissement(df):
 
 
 def graphique_evolution_prix(df):
-    """Courbe d'évolution du prix médian au m²."""
+    """courbe d'évolution du prix médian au m²."""
     if df.empty:
         return None
 
@@ -217,8 +211,7 @@ def graphique_prix_m2(df):
 
     df_filtre = df[(df["prix_m2"] > 1000) & (df["prix_m2"] < 50000)].copy()
 
-    # Trier par ordre d'arrondissement
-    df_filtre["arr_num"] = pd.to_numeric(df_filtre["arrondissement"], errors="coerce")
+    df_filtre["arr_num"] = pd.to_numeric(df_filtre["arrondissement"], errors="coerce") #tri par ordre darrronidissement
     df_filtre = df_filtre.sort_values("arr_num")
 
 
@@ -299,7 +292,7 @@ def graphique_nature_mutation(df):
             "#5a9a6f",  # vert doux
             "#c17a4a",  # orange doux
             "#b05d7a",  # rose doux
-            "#4a9a9a",  # turquoise doux
+            "#4a9a9a",  # turquoise doux superbe
         ]
     )
     fig.update_traces(
@@ -316,7 +309,7 @@ def graphique_nature_mutation(df):
 
 
 def render_home(df):
-    """Affiche le lexique des termes (anciennement page de lexique)."""
+    """affiche le lexique des termes."""
 
     st.markdown("\n".join([
         "<style>",
@@ -387,7 +380,6 @@ def render_transactions(df):
     if not _ensure_data(df):
         return
 
-    # layout: filtres a gauche, contenu a droite
     col_filtre, col_contenu = st.columns([1, 3])
 
     with col_filtre:
@@ -395,7 +387,6 @@ def render_transactions(df):
 
     with col_contenu:
 
-        # kpis specifiques aux transactions
         afficher_kpis(df_filtre)
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -422,7 +413,6 @@ def render_prix(df):
     if not _ensure_data(df):
         return
 
-    # layout: filtres a gauche, contenu a droite
     col_filtre, col_contenu = st.columns([1, 3])
 
     with col_filtre:

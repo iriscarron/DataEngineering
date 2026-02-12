@@ -7,8 +7,7 @@ from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
 
 
-# Utiliser localhost par défaut (marche sur Windows Docker)
-ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200")
+ELASTICSEARCH_URL = os.getenv("ELASTICSEARCH_URL", "http://localhost:9200") # Utiliser localhost par défaut (marche sur Windows Docker)
 INDEX_NAME = "dvf_transactions"
 
 
@@ -122,8 +121,7 @@ def indexer_transactions(df):
                 }
             }
 
-            # Ajouter les coordonnees si disponibles
-            if row.get("latitude") and row.get("longitude"):
+            if row.get("latitude") and row.get("longitude"):             # Ajouter les coordonnees si disponibles
                 doc["_source"]["coordonnees"] = {
                     "lat": float(row["latitude"]),
                     "lon": float(row["longitude"])
@@ -149,10 +147,8 @@ def extraire_arrondissement(query):
     match = re.search(pattern, query, re.IGNORECASE)
 
     if match:
-        arr_num = match.group(1)  # Le groupe 1 capture directement le numéro
-        # Verifier que c'est un arrondissement valide (1-20)
-        if 1 <= int(arr_num) <= 20:
-            # Retirer l'arrondissement de la query
+        arr_num = match.group(1)  # le grp 1 capture directement le numéro
+        if 1 <= int(arr_num) <= 20: #arrodnissement entre 1 et 20 OK?
             query_clean = re.sub(pattern, ' ', query, flags=re.IGNORECASE)
             query_clean = re.sub(r'\s+', ' ', query_clean).strip()
             return arr_num, query_clean
@@ -176,7 +172,6 @@ def rechercher_transactions(query, filtres=None, taille=100):
     must_clauses = []
     filter_clauses = []
 
-    # Extraire l'arrondissement de la requete si present
     arr_detecte, query_nettoyee = extraire_arrondissement(query or "")
     if arr_detecte:
         filter_clauses.append({"term": {"arrondissement": arr_detecte}})

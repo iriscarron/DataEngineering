@@ -19,22 +19,22 @@ def rechercher_avec_arrondissement(query, filtres=None, taille=100):
 
     query_originale = query  # DEBUG
 
-    # Detecter l'arrondissement dans la query
-    # Pattern amélioré: gère 1-20, tous les suffixes (e, ème, er, etc.)
+    # detecter l'arrondissement dans la query
+    #pattern : gère 1-20, tous les suffixes (e, ème, er, etc.)
     # (?<!\d) = pas précédé d'un chiffre, (?!\w) = pas suivi d'un caractère mot
     pattern = r'(?<!\d)(20|1[0-9]|[1-9])\s*(e|è|ème|eme|er|ère|re|ième|ieme)(?!\w)'
     match = re.search(pattern, query or "", re.IGNORECASE)
 
     arr_detecte = None  # DEBUG
     if match:
-        arr_num = match.group(1)  # Le groupe 1 capture directement le numéro
+        arr_num = match.group(1)  # le groupe 1 capture directement le numéro
         if 1 <= int(arr_num) <= 20:
             arr_detecte = arr_num  # DEBUG
-            # Ajouter filtre arrondissement
+            # ajouter filtre arrondissement
             filter_clauses.append({"term": {"arrondissement": arr_num}})
-            # Retirer l'arrondissement de la query
+            # retirer l'arrondissement de la query
             query = re.sub(pattern, ' ', query, flags=re.IGNORECASE).strip()
-            # Nettoyer les espaces multiples
+            # nettoyer les espaces multiples
             query = re.sub(r'\s+', ' ', query).strip()
 
     if query and query.strip():
@@ -309,7 +309,7 @@ def render_recherche(_df):
                 st.plotly_chart(fig, use_container_width=True)
 
         with tab3:
-            # Extraire lat/lon depuis le champ coordonnees (geo_point Elasticsearch)
+            # extraire lat/lon depuis le champ coordonnees (geo_point Elasticsearch)
             if "coordonnees" in df_resultats.columns:
                 df_resultats["latitude"] = df_resultats["coordonnees"].apply(
                     lambda x: x.get("lat") if isinstance(x, dict) else None

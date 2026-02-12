@@ -4,10 +4,10 @@ import streamlit as st
 
 
 def render_simple(df):
-    """Affiche une page de test avec un aperçu des données."""
+    """affiche une page de test avec un aperçu des données."""
 
     st.header("Page simple")
-    st.write("Utilisez cette page comme zone de test pour vos composants.")
+    st.write("Utilisez cette page comme zone de test pour les composants.")
     st.write(f"Lignes visibles: {len(df):,}")
     if not df.empty:
         st.dataframe(df.head(10), use_container_width=True, hide_index=True)

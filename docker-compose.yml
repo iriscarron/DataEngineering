@@ -49,7 +49,6 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      # monte le code hote pour rechargement auto en dev (ne pas monter un venv local)
       - .:/app
 
 volumes:

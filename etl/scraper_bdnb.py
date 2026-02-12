@@ -35,7 +35,6 @@ def creer_session_http():
 def creer_table_batiments(engine):
     """Cree la table batiments si elle n'existe pas"""
     with engine.connect() as conn:
-        # Activer PostGIS si nécessaire
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
         conn.commit()
 
@@ -150,7 +149,7 @@ def transformer_donnees_bdnb(batiments):
         lat, lon = None, None
         if geom and geom.get("coordinates"):
             try:
-                coords = geom["coordinates"][0][0]  # Premier anneau du premier polygone
+                coords = geom["coordinates"][0][0]  # premier anneau du premier polygone
                 if coords:
                     lons = [c[0] for c in coords]
                     lats = [c[1] for c in coords]
@@ -193,7 +192,7 @@ def scraper_bdnb_paris(limit_total=50000):
 
     total_inseres = 0
     offset = 0
-    batch_size = 10  # L'API BDNB limite strictement à 10 résultats
+    batch_size = 10  # L'API de BDNB limite strictement à 10 résultats
 
     while offset < limit_total:
         print(f"Recuperation batch {offset}-{offset+batch_size}...")
@@ -213,11 +212,9 @@ def scraper_bdnb_paris(limit_total=50000):
 
         print(f"  -> {len(batiments)} batiments recuperes")
 
-        # Inserer immediatement ce batch (evite les INSERT trop gros)
         if records:
             df = pd.DataFrame(records)
 
-            # Filtrer les doublons deja en base
             with engine.connect() as conn:
                 ids_existants = pd.read_sql(
                     text("SELECT batiment_groupe_id FROM batiments WHERE batiment_groupe_id = ANY(:ids)"),
@@ -245,10 +242,9 @@ def scraper_bdnb_paris(limit_total=50000):
         time.sleep(0.5)  # Rate limiting
 
     if total_inseres > 0:
-        print(f"\nInsertion terminee: {total_inseres} batiments")
+        print(f"\ninsertion terminee: {total_inseres} batiments")
 
-        # Convertir geom_json en vraie géométrie PostGIS
-        print("\nConversion des géométries JSON en PostGIS (2154 -> 4326)...")
+        print("\nconversion des géométries JSON en PostGIS (2154 -> 4326)...")
         with engine.connect() as conn:
             conn.execute(text("""
                 UPDATE batiments
@@ -258,8 +254,7 @@ def scraper_bdnb_paris(limit_total=50000):
             conn.commit()
         print("Géométries converties")
 
-    # Stats
-    with engine.connect() as conn:
+    with engine.connect() as conn:     # Stats
         result = conn.execute(text("SELECT COUNT(*) FROM batiments"))
         count = result.scalar()
 
@@ -288,8 +283,7 @@ def enrichir_parcelles_avec_bdnb():
 
     engine = create_engine(DATABASE_URL)
 
-    # Ajouter colonnes si elles n'existent pas
-    with engine.connect() as conn:
+    with engine.connect() as conn:     # add colonnes si elles n'existent pas
         conn.execute(text("""
             ALTER TABLE parcelles
             ADD COLUMN IF NOT EXISTS annee_construction INTEGER,
@@ -300,7 +294,6 @@ def enrichir_parcelles_avec_bdnb():
         """))
         conn.commit()
 
-        # Mettre a jour avec jointure
         result = conn.execute(text("""
             UPDATE parcelles p
             SET
@@ -319,11 +312,10 @@ def enrichir_parcelles_avec_bdnb():
 
 def run():
     """Execute le scraping complet"""
-    scraper_bdnb_paris(limit_total=3000)
-    # enrichir_parcelles_avec_bdnb()  # Table parcelles non créée
+    scraper_bdnb_paris(limit_total=3000) #LIMITE DE SCRAP ICI
 
-    # Transformer les géométries de geom_json vers geom
-    print("\nTransformation des géométries...")
+
+    print("\ntransformation des géométries...")
     engine = create_engine(DATABASE_URL)
     with engine.connect() as conn:
         result = conn.execute(text(

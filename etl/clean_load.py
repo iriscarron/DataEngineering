@@ -1,6 +1,4 @@
-"""Clean DVF CSV and load into Postgres.
-Assumes a table `transactions` already exists (see docker/init-db.sql).
-"""
+"""clean et dans database"""
 import os
 from pathlib import Path
 import pandas as pd

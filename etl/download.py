@@ -33,7 +33,6 @@ def telecharger_dvf_paris(annees=None):
             response = requests.get(url, timeout=120)
             response.raise_for_status()
 
-            # Decompresser et lire le CSV
             with gzip.GzipFile(fileobj=BytesIO(response.content)) as f:
                 df = pd.read_csv(f, low_memory=False)
 
@@ -58,12 +57,10 @@ def transformer_csv_vers_schema(df):
     if df.empty:
         return df
 
-    # Filtrer uniquement Paris (codes postaux 75XXX)
     df = df[df["code_postal"].astype(str).str.startswith("75")].copy()
 
     transformed = pd.DataFrame()
 
-    # Mapping des colonnes CSV vers notre schema
     transformed["date_mutation"] = pd.to_datetime(df["date_mutation"], errors="coerce")
     transformed["valeur_fonciere"] = pd.to_numeric(
         df["valeur_fonciere"].astype(str).str.replace(",", "."),
@@ -71,34 +68,27 @@ def transformer_csv_vers_schema(df):
     )
     transformed["surface_reelle_bati"] = pd.to_numeric(df["surface_reelle_bati"], errors="coerce")
 
-    # Prix au m2
     transformed["prix_m2"] = (
         transformed["valeur_fonciere"] / transformed["surface_reelle_bati"]
     ).replace([float("inf"), float("-inf")], None)
 
-    # Autres colonnes
     transformed["nb_pieces"] = pd.to_numeric(df["nombre_pieces_principales"], errors="coerce")
     transformed["type_local"] = df["type_local"]
     transformed["nature_mutation"] = df["nature_mutation"]
     transformed["code_postal"] = df["code_postal"].astype(str)
 
-    # Arrondissement (extrait du code postal)
     transformed["arrondissement"] = transformed["code_postal"].apply(
         lambda x: str(int(x[-2:])) if pd.notna(x) and len(str(x)) >= 2 else None
     )
 
-    # Coordonnees GPS
     transformed["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
     transformed["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
 
-    # ID mutation
     if "id_mutation" in df.columns:
         transformed["id_mutation"] = df["id_mutation"]
 
-    # Supprimer lignes sans donnees essentielles
     transformed = transformed.dropna(subset=["valeur_fonciere", "date_mutation"])
 
-    # Filtrer valeurs aberrantes
     transformed = transformed[
         (transformed["valeur_fonciere"] > 1000) &
         (transformed["valeur_fonciere"] < 100000000)
@@ -119,7 +109,6 @@ def run_download_pipeline(annees=None, vider_avant=True):
     print("DVF Paris - Telechargement CSV (methode rapide)")
     print("=" * 60)
 
-    # Etape 1: Telecharger
     print("\n[1/4] Telechargement des fichiers CSV...")
     df_raw = telecharger_dvf_paris(annees)
 
@@ -127,12 +116,10 @@ def run_download_pipeline(annees=None, vider_avant=True):
         print("Aucune donnee telechargee")
         return None
 
-    # Etape 2: Transformer
     print("\n[2/4] Transformation des donnees...")
     df_transformed = transformer_csv_vers_schema(df_raw)
     print(f"  {len(df_transformed)} transactions Paris valides")
 
-    # Etape 3: Charger en BDD
     print("\n[3/4] Chargement en base PostgreSQL...")
     engine = create_engine(DATABASE_URL)
 
@@ -153,7 +140,6 @@ def run_download_pipeline(annees=None, vider_avant=True):
     )
     print(f"  {len(df_transformed)} enregistrements charges")
 
-    # Etape 4: Indexer Elasticsearch
     try:
         from etl.elasticsearch_utils import attendre_elasticsearch, creer_index, indexer_transactions
 

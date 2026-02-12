@@ -12,22 +12,18 @@ def render_app():
     layout.configure_page()
     layout.apply_theme()
 
-    # Initialiser l'état de navigation
     if "show_splash" not in st.session_state:
         st.session_state.show_splash = True
 
     if "current_page" not in st.session_state:
         st.session_state.current_page = "Accueil"
 
-    # Afficher la page d'accueil (splash screen) en premier
     if st.session_state.show_splash:
         splash.render_splash()
         return
 
-    # Navigation standard après la splash screen
     pages = ["Accueil", "Transactions", "Prix", "Carte", "Recherche", "À propos"]
 
-    # Bouton pour revenir à la splash screen
     col1, col2, col3 = st.columns([1, 6, 1])
     with col2:
         if st.button("Revenir à la page d'accueil", help="Retour à l'accueil", use_container_width=True):

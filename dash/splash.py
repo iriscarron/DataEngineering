@@ -4,9 +4,8 @@ import streamlit as st
 
 
 def render_splash():
-    """Affiche la page d'accueil interactive avec description et navigation."""
+    """affiche la page d'accueil interactive avec description et navigation."""
 
-    # Recuperer le parametre nav de l'URL
     nav_param = ""
     if hasattr(st, "query_params"):
         nav_param = st.query_params.get("nav", "")
@@ -23,7 +22,6 @@ def render_splash():
         st.session_state["show_splash"] = False
         st.rerun()
 
-    # CSS pour la page d'accueil (style landing)
     st.markdown("\n".join([
         "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'>",
         "<style>",
@@ -51,7 +49,6 @@ def render_splash():
         "</div>",
     ]), unsafe_allow_html=True)
 
-    # Description du dashboard
     st.markdown("\n".join([
         "<div class='landing-description'>",
         "<strong>Bonjour !</strong>",
@@ -72,7 +69,6 @@ def render_splash():
         "</div>",
     ]), unsafe_allow_html=True)
 
-    # Cartes explicatives centrees avec padding
     pad1, col1, col2, col3, pad2 = st.columns([1, 2, 2, 2, 1])
     with col1:
         st.markdown("\n".join([

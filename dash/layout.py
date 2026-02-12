@@ -16,7 +16,7 @@ TEXT_COLOR = "#2d3436"
 COLORWAY = [
     "#2c5f2d",  # vert foncé
     "#97bc62",  # vert clair
-    "#6b8e23",  # olive
+    "#6b8e23",  # olive excellent
     "#4a7c59",  # vert forêt
     "#8B7355",  # brun/terre
     "#A0826D",  # beige foncé
@@ -198,22 +198,19 @@ def charger_arrondissements_avec_stats(df_transactions):
     try:
         import json
 
-        # Charger le GeoJSON des arrondissements
         with open("data/arrondissements-paris.geojson", "r", encoding="utf-8") as f:
             geojson = json.load(f)
 
-        # Agréger les stats par arrondissement
         agg = df_transactions.groupby("arrondissement").agg({
             "valeur_fonciere": ["mean", "count"],
             "prix_m2": "mean",
         }).reset_index()
         agg.columns = ["arrondissement", "prix_moyen", "nb_transactions", "prix_m2_moyen"]
 
-        # Convertir arrondissement en numéro pour le merge
         agg["arr_num"] = agg["arrondissement"].astype(str)
 
         return agg, geojson
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e: 
         st.error(f"Erreur de chargement des arrondissements: {e}")
         return pd.DataFrame(), None
 
@@ -288,7 +285,7 @@ def render_filters_sidebar(df, show_percentile=False, show_date_range=False):
             format="%d"
         )
 
-    # seuil grosses ventes (optionnel)
+    # seuil grosses ventes
     seuil_percentile = 95
     if show_percentile:
         seuil_percentile = st.slider(

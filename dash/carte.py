@@ -41,8 +41,7 @@ def render_carte(df):
         )
 
         if niveau_detail == "Arrondissements":
-            # Vue par arrondissements avec polygones (choroplèthe)
-            with st.spinner("Chargement des statistiques par arrondissement..."):
+            with st.spinner("Chargement des statistiques par arrondissement..."): # choroplèthe
                 df_arr, geojson = layout.charger_arrondissements_avec_stats(df_map)
 
             if df_arr.empty or geojson is None:
@@ -51,18 +50,16 @@ def render_carte(df):
 
             st.info(f"20 arrondissements - {len(df_map):,} transactions")
 
-            # Mapper les codes arrondissement du GeoJSON avec les stats
-            # Le GeoJSON contient "c_ar" pour le code arrondissement
+            # mapper les codes arrondissement du GeoJSON avec les stats
+            # Lle GeoJSON contient "c_ar" pour le code arrondissement
             for feature in geojson["features"]:
                 arr_code = feature["properties"].get("c_ar", "")
-                # Convertir en string et retirer le "75" du début si présent (ex: "7501" -> "1")
                 arr_code = str(arr_code)
                 if arr_code and arr_code.startswith("75"):
                     arr_code = str(int(arr_code[2:]))
                 feature["id"] = arr_code
 
-            # Créer la carte choroplèthe
-            fig = go.Figure(go.Choroplethmapbox(
+            fig = go.Figure(go.Choroplethmapbox( #carte chloro
                 geojson=geojson,
                 locations=df_arr["arrondissement"],
                 z=df_arr["prix_m2_moyen"],
@@ -99,7 +96,6 @@ def render_carte(df):
             st.plotly_chart(fig, use_container_width=True)
 
         elif niveau_detail == "Bâtiments":
-            # Vue par bâtiments (polygones)
             with st.spinner("Chargement des bâtiments avec transactions..."):
                 df_batiments = layout.charger_batiments_avec_transactions(df_map)
 
@@ -109,10 +105,8 @@ def render_carte(df):
 
             st.info(f"{len(df_batiments):,} bâtiments avec transactions")
 
-            # Créer le GeoJSON des bâtiments
             features = []
             for idx, row in df_batiments.iterrows():
-                # Ignorer les lignes sans géométrie
                 if row["geometry"] is None or pd.isna(row["geometry"]):
                     continue
 
@@ -136,7 +130,6 @@ def render_carte(df):
                 "features": features
             }
 
-            # Créer la figure avec Choroplethmapbox
             fig = go.Figure(go.Choroplethmapbox(
                 geojson=geojson,
                 locations=df_batiments.index.astype(str),
@@ -160,8 +153,7 @@ def render_carte(df):
                 )
             ))
 
-            # Centrer sur Paris
-            fig.update_layout(
+            fig.update_layout( #paris centrage
                 mapbox=dict(
                     style="carto-positron",
                     center=dict(lat=48.856, lon=2.352),
