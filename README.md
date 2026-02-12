@@ -16,11 +16,9 @@ Le projet met en pratique l'ensemble des concepts abordés pendant l'unité : sc
 
 Les données scrapées proviennent de l'API DVF+ du Cerema. Le Cerema (Centre d'études et d'expertise sur les risques, l'environnement, la mobilité et l'aménagement) met à disposition cette API au dessus de la base DVF publiée par la Direction Générale des Finances Publiques (DGFiP). La base DVF recense l'ensemble des transactions immobilières réalisées en France : prix de vente, date, type de bien, surface, nombre de pièces et localisation. Elle est mise à jour deux fois par an (avril et octobre) et disponible en open data sous licence ouverte Etalab.
 
-L'API expose deux points d'accès que notre scraper utilise.
+L'API expose le point d'accès "mutations" qui renvoie les données tabulaires de chaque transaction : prix, date, surface, type de bien, arrondissement, etc. C'est le point d'accès utilisé au lancement de l'application pour collecter l'ensemble des transactions parisiennes.
 
-**Le point d'accès "mutations"** renvoie les données tabulaires de chaque transaction : prix, date, surface, type de bien, arrondissement, etc. C'est le point d'accès utilisé par défaut au lancement de l'application.
-
-**Le point d'accès "géomutations"** renvoie les mêmes informations enrichies des géométries cadastrales des parcelles concernées (polygones GeoJSON). Ces géométries permettent de calculer les coordonnées GPS précises de chaque transaction et d'afficher les contours réels des bâtiments sur la carte. Ce point d'accès est plus lent à interroger car les réponses sont beaucoup plus volumineuses.
+Les données des bâtiments proviennent de l'API BDNB (Base de Données Nationale des Bâtiments), accessible sur bdnb.io. Cette API fournit les géométries des bâtiments parisiens ainsi que des informations complémentaires (année de construction, classe DPE, matériaux, etc.). Ces géométries permettent d'afficher les polygones individuels des immeubles sur la carte.
 
 En complément, les contours géographiques des 20 arrondissements de Paris sont téléchargés depuis la plateforme Open Data de la Ville de Paris (opendata.paris.fr) sous forme de GeoJSON, et servent à l'affichage de la carte choroplèthe.
 
@@ -51,6 +49,8 @@ Projet_data_engineering/
 │
 ├── etl/                        Pipeline ETL (scraping, transformation, chargement)
 │   ├── scraper.py              Scraper API DVF+ et pipeline complet
+│   ├── scraper_bdnb.py         Scraper API BDNB (bâtiments)
+│   ├── load_cadastre.py        Chargement des bâtiments cadastraux
 │   ├── elasticsearch_utils.py  Indexation et recherche Elasticsearch
 │   └── clean_load.py           Nettoyage des données
 │
@@ -74,19 +74,21 @@ Projet_data_engineering/
 | Traitement de données | Pandas, NumPy | 2.0+, 1.25+ |
 | ORM | SQLAlchemy | 2.0+ |
 | Conteneurisation | Docker et Docker Compose | |
-| Source scrapée | API DVF+ Cerema | |
+| Sources scrapées | API DVF+ Cerema, API BDNB | |
 
 ## Pipeline ETL
 
-Le pipeline s'exécute automatiquement au premier lancement. Il se décompose en quatre étapes.
+Le pipeline s'exécute automatiquement au premier lancement. Il se décompose en cinq étapes.
 
-**Étape 1 : Scraping.** Les données sont scrapées depuis l'API DVF+ du Cerema pour chacun des 20 arrondissements. La pagination est gérée automatiquement (500 résultats par page) avec retry et backoff exponentiel en cas d'erreur. Le scraper parcourt séquentiellement chaque arrondissement et accumule les résultats.
+**Étape 1 : Scraping des transactions.** Les données sont scrapées depuis l'API DVF+ du Cerema pour chacun des 20 arrondissements. La pagination est gérée automatiquement (500 résultats par page) avec retry et backoff exponentiel en cas d'erreur. Le scraper parcourt séquentiellement chaque arrondissement et accumule les résultats.
 
-**Étape 2 : Transformation.** Les champs issus de l'API sont mappés vers le schéma de la base de données. Le prix au mètre carré est calculé à partir de la valeur foncière et de la surface bâtie. Les coordonnées GPS sont extraites (centroïde des parcelles en mode géo, ou approximation en mode standard). Les enregistrements sans prix ou sans date sont écartés.
+**Étape 2 : Transformation.** Les champs issus de l'API sont mappés vers le schéma de la base de données. Le prix au mètre carré est calculé à partir de la valeur foncière et de la surface bâtie. Les coordonnées GPS sont extraites. Les enregistrements sans prix ou sans date sont écartés.
 
 **Étape 3 : Chargement en base.** Les enregistrements sont insérés par lots de 1000 dans PostgreSQL. Six index sont créés sur les colonnes les plus interrogées (date, arrondissement, type de bien, nature de mutation, prix, identifiant de mutation) pour garantir la réactivité du dashboard.
 
 **Étape 4 : Indexation Elasticsearch.** Les transactions sont indexées en bulk dans Elasticsearch avec un mapping optimisé pour la recherche textuelle en français. Un champ composite `recherche_complete` regroupe l'ensemble des informations recherchables pour permettre la recherche floue.
+
+**Étape 5 : Scraping des bâtiments.** Les géométries des bâtiments parisiens sont scrapées depuis l'API BDNB par lots de 10 (limite imposée par l'API). Les géométries GeoJSON sont converties en objets PostGIS pour permettre les jointures spatiales avec les transactions. La limite de bâtiments collectés est configurable dans `etl/scraper_bdnb.py`.
 
 ## Pages du dashboard
 
@@ -110,7 +112,7 @@ Le dashboard est organisé en six pages, chacune répondant à un besoin précis
 
 ![Prix - Analyse comparative](screenshots/prix.png)
 
-**Carte.** Cette page offre deux modes de visualisation géographique, sélectionnables via un menu déroulant. Le mode "Arrondissements" affiche une carte choroplèthe de Paris colorée selon le prix moyen au m² dans chaque arrondissement ; le survol de chaque zone indique le nombre de transactions, le prix au m² et le prix moyen. Le mode "Bâtiments" affiche les polygones cadastraux individuels des immeubles ayant fait l'objet d'une transaction, colorés selon leur prix moyen au m². Ce second mode n'est disponible que si les données ont été scrapées avec l'option géométries (mode --geo décrit plus haut), car il nécessite les polygones cadastraux.
+**Carte.** Cette page offre deux modes de visualisation géographique, sélectionnables via un menu déroulant. Le mode "Arrondissements" affiche une carte choroplèthe de Paris colorée selon le prix moyen au m² dans chaque arrondissement ; le survol de chaque zone indique le nombre de transactions, le prix au m² et le prix moyen. Le mode "Bâtiments" affiche les polygones individuels des immeubles ayant fait l'objet d'une transaction, colorés selon leur prix moyen au m². Pour chaque bâtiment, le prix au m² est calculé en faisant la moyenne de toutes les transactions situées à proximité. Les mêmes filtres (années, arrondissements, type de bien, prix) s'appliquent aux deux modes.
 
 ![Carte - Vue par arrondissements](screenshots/cartearrondissements.png)
 
@@ -141,7 +143,20 @@ Table `transactions` :
 | arrondissement | VARCHAR | Numéro d'arrondissement |
 | latitude | NUMERIC | Coordonnée GPS |
 | longitude | NUMERIC | Coordonnée GPS |
-| geom_json | TEXT | Géométrie cadastrale de la parcelle (mode géo uniquement) |
+| scraped_at | TIMESTAMP | Date de collecte |
+
+Table `batiments` :
+
+| Colonne | Type | Description |
+|---|---|---|
+| id | SERIAL | Identifiant unique |
+| batiment_groupe_id | TEXT | Identifiant BDNB du bâtiment |
+| id_parcelle | TEXT | Identifiant de la parcelle cadastrale |
+| annee_construction | INTEGER | Année de construction |
+| classe_dpe | TEXT | Classe énergétique (A à G) |
+| nb_logements | INTEGER | Nombre de logements |
+| commune | TEXT | Commune INSEE |
+| geom | GEOMETRY | Géométrie PostGIS du bâtiment |
 | scraped_at | TIMESTAMP | Date de collecte |
 
 ## Prérequis
@@ -161,6 +176,16 @@ docker-compose up --build
 L'application est ensuite accessible à l'adresse **http://localhost:8501**.
 
 Au premier lancement, les images Docker sont téléchargées, Elasticsearch démarre (30 à 60 secondes), puis le scraping se lance automatiquement en deux phases. D'abord, les transactions immobilières sont scrapées depuis l'API DVF+ du Cerema pour les 20 arrondissements (**5 à 15 minutes**). Ensuite, les bâtiments sont scrapés depuis l'API BDNB (**5 à 30 minutes** selon la limite configurée). Une fois le scraping terminé, le dashboard Streamlit se lance et les données sont consultables.
+
+### Alternative : charger les bâtiments depuis le cadastre local
+
+Il est possible de charger les bâtiments depuis le fichier cadastral inclus dans le projet (`data/cadastre/cadastre-75-batiments.json`) au lieu de scraper l'API BDNB. Cela permet d'obtenir la couverture complète de Paris (110 000+ bâtiments) sans dépendre de l'API. Cette commande ne concerne que les bâtiments pour la carte ; les transactions doivent toujours être scrapées via le pipeline standard.
+
+```bash
+docker-compose exec app python etl/load_cadastre.py
+```
+
+A noter que le chargement de 110 000 bâtiments rend l'affichage de la carte en mode "Bâtiments" plus long à charger.
 
 ### Réinitialiser et relancer
 
@@ -192,23 +217,16 @@ En exécution locale (hors Docker), remplacer les noms de services par `localhos
 
 ## Commandes utiles
 
-Relancer le scraping manuellement (mode standard) :
+Relancer le scraping des transactions :
 
 ```bash
 docker-compose exec app python etl/scraper.py
 ```
 
-Relancer le scraping avec géométries cadastrales :
+Relancer le scraping des bâtiments :
 
 ```bash
-docker-compose exec app python etl/scraper.py --geo
-```
-
-Réinitialiser l'ensemble des données et relancer :
-
-```bash
-docker-compose down -v
-docker-compose up --build
+docker-compose exec app python etl/scraper_bdnb.py
 ```
 
 Accéder directement à la base PostgreSQL :

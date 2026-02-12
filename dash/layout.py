@@ -176,7 +176,7 @@ def charger_batiments_avec_transactions(df_transactions):
                     ST_SetSRID(ST_MakePoint(t.longitude, t.latitude), 4326)::geography,
                     200
                 )
-                AND CAST(substring(b.commune from '([0-9]+)') AS INTEGER) = CAST(t.arrondissement AS INTEGER)
+                AND CAST(substring(b.commune from '([0-9]+)') AS INTEGER) % 100 = CAST(t.arrondissement AS INTEGER)
             WHERE b.geom IS NOT NULL
                 AND t.latitude IS NOT NULL
                 AND t.longitude IS NOT NULL
