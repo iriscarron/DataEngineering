@@ -35,6 +35,10 @@ def creer_session_http():
 def creer_table_batiments(engine):
     """Cree la table batiments si elle n'existe pas"""
     with engine.connect() as conn:
+        # Activer PostGIS si nécessaire
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+        conn.commit()
+
         conn.execute(text("""
             DROP TABLE IF EXISTS batiments CASCADE;
 
@@ -59,12 +63,14 @@ def creer_table_batiments(engine):
                 nb_etages INTEGER,
                 chauffage_type TEXT,
                 geom_json TEXT,
+                geom GEOMETRY(MultiPolygon, 4326),
                 scraped_at TIMESTAMPTZ DEFAULT NOW()
             );
 
             CREATE INDEX idx_batiments_parcelle ON batiments(id_parcelle);
             CREATE INDEX idx_batiments_dpe ON batiments(classe_dpe);
             CREATE INDEX idx_batiments_annee ON batiments(annee_construction);
+            CREATE INDEX idx_batiments_geom ON batiments USING GIST(geom);
         """))
         conn.commit()
     print("Table batiments creee")
@@ -223,6 +229,17 @@ def scraper_bdnb_paris(limit_total=50000):
 
         print("Insertion terminee")
 
+        # Convertir geom_json en vraie géométrie PostGIS
+        print("Conversion des géométries JSON en PostGIS (2154 -> 4326)...")
+        with engine.connect() as conn:
+            conn.execute(text("""
+                UPDATE batiments
+                SET geom = ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(geom_json), 2154), 4326)
+                WHERE geom_json IS NOT NULL AND geom IS NULL
+            """))
+            conn.commit()
+        print("Géométries converties")
+
     # Stats
     with engine.connect() as conn:
         result = conn.execute(text("SELECT COUNT(*) FROM batiments"))
@@ -285,7 +302,7 @@ def enrichir_parcelles_avec_bdnb():
 def run():
     """Execute le scraping complet"""
     scraper_bdnb_paris(limit_total=50000)
-    enrichir_parcelles_avec_bdnb()
+    # enrichir_parcelles_avec_bdnb()  # Table parcelles non créée
 
 
 if __name__ == "__main__":

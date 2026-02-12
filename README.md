@@ -100,13 +100,25 @@ Le dashboard est organisé en six pages, chacune répondant à un besoin précis
 
 **Page d'accueil.** C'est la première page affichée à l'ouverture de l'application. Elle présente brièvement le projet et propose six cartes de navigation qui mènent directement aux différentes sections du dashboard. Son rôle est d'orienter l'utilisateur et de lui donner une vue d'ensemble des fonctionnalités disponibles.
 
-**Accueil (lexique).** Cette page fait office de guide pour l'utilisateur. Elle explique les termes utilisés dans le dashboard sous forme de quatre cartes thématiques : les types d'habitation (appartement, maison, dépendance, local industriel), les types de vente (vente classique, VEFA, adjudication, expropriation), les indicateurs clés (valeur foncière, prix au m², surface, nombre de pièces) et les sources de données. Elle permet à un utilisateur non spécialiste de l'immobilier de comprendre les données présentées dans les autres pages.
+![Accueil - Titre](screenshots/accueiltitre.png)
+
+![Accueil - Boutons de navigation](screenshots/accueilboutons.png)
+
+**Accueil.** Cette page fait office de guide pour l'utilisateur. Elle explique les termes utilisés dans le dashboard sous forme de quatre cartes thématiques : les types d'habitation (appartement, maison, dépendance, local industriel), les types de vente (vente classique, VEFA, adjudication, expropriation), les indicateurs clés (valeur foncière, prix au m², surface, nombre de pièces) et les sources de données. Elle permet à un utilisateur non spécialiste de l'immobilier de comprendre les données présentées dans les autres pages.
+
+![Accueil - Onglets informatifs](screenshots/accueilonglet.png)
 
 **Transactions.** Cette page sert à analyser le volume et la nature des transactions immobilières. Elle affiche cinq indicateurs de synthèse en haut de page : nombre total de transactions, prix moyen, prix médian au m², surface moyenne, et nombre de grosses ventes dans le top 5%. En dessous, trois graphiques complètent l'analyse : un histogramme de l'évolution mensuelle du volume de transactions (pour repérer les périodes d'activité), un diagramme circulaire de la répartition par type de mutation (vente classique, VEFA, adjudication, etc.), et un nuage de points des transactions les plus importantes colorées par arrondissement (pour identifier les ventes exceptionnelles). Des filtres dans la colonne de gauche permettent de restreindre la période, les arrondissements, les types de bien et la tranche de prix.
 
+![Transactions - Analyse du volume](screenshots/transactions.png)
+
 **Prix.** Cette page est dédiée à l'analyse comparative des prix. Elle présente quatre indicateurs statistiques (prix minimum, premier quartile, troisième quartile, prix maximum) puis quatre graphiques : le prix médian de vente par arrondissement (pour comparer les arrondissements entre eux), l'évolution mensuelle du prix médian au m² (pour observer la tendance du marché), la distribution statistique du prix au m² par arrondissement sous forme de boîtes à moustaches (pour visualiser la dispersion et les valeurs atypiques), et le prix médian selon le type de bien (pour comparer appartements, maisons, locaux commerciaux, etc.). Les mêmes filtres que la page Transactions sont disponibles.
 
+![Prix - Analyse comparative](screenshots/prix.png)
+
 **Carte.** Cette page offre deux modes de visualisation géographique, sélectionnables via un menu déroulant. Le mode "Arrondissements" affiche une carte choroplèthe de Paris colorée selon le prix moyen au m² dans chaque arrondissement ; le survol de chaque zone indique le nombre de transactions, le prix au m² et le prix moyen. Le mode "Bâtiments" affiche les polygones cadastraux individuels des immeubles ayant fait l'objet d'une transaction, colorés selon leur prix moyen au m². Ce second mode n'est disponible que si les données ont été scrapées avec l'option géométries (mode --geo décrit plus haut), car il nécessite les polygones cadastraux.
+
+![Carte - Vue par arrondissements](screenshots/cartearrondissements.png)
 
 **Recherche.** Cette page exploite le moteur de recherche Elasticsearch pour permettre une recherche en texte libre parmi les transactions. L'utilisateur saisit une requête en langage naturel, par exemple "appartement 16ème" ou "maison 5 pièces". Le système détecte automatiquement le numéro d'arrondissement dans la requête et l'applique comme filtre. Un champ budget maximum permet de borner les résultats par prix. Les résultats sont présentés sous trois onglets : une liste détaillée des 20 premières transactions avec prix et caractéristiques, des graphiques analytiques (répartition par arrondissement, distribution des prix, prix par type de bien), et une carte de localisation des résultats. Quatre indicateurs (nombre de résultats, prix moyen, prix médian au m², surface moyenne) synthétisent les résultats en haut de page.
 

@@ -162,7 +162,7 @@ def charger_batiments_avec_transactions(df_transactions):
                 AVG(t.prix_m2) as prix_m2_moyen,
                 MAX(t.date_mutation) as derniere_transaction
             FROM batiments b
-            INNER JOIN transactions t ON b.commune = CONCAT('751', LPAD(t.arrondissement::text, 2, '0'))
+            INNER JOIN transactions t ON SUBSTRING(b.commune FROM 'Paris ([0-9]+)[er]') = t.arrondissement
             WHERE b.geom IS NOT NULL
             AND t.valeur_fonciere IS NOT NULL
             GROUP BY b.id, b.geom, b.commune

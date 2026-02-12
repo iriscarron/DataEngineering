@@ -37,9 +37,6 @@ def rechercher_avec_arrondissement(query, filtres=None, taille=100):
             # Nettoyer les espaces multiples
             query = re.sub(r'\s+', ' ', query).strip()
 
-    # DEBUG - Afficher dans Streamlit
-    st.caption(f"DEBUG: Query='{query_originale}' | Arr={arr_detecte} | Texte='{query}' | Filtres={filter_clauses}")
-
     if query and query.strip():
         must_clauses.append({
             "multi_match": {
@@ -84,7 +81,7 @@ def render_recherche(_df):
 					padding: 2rem; border-radius: 16px; margin-bottom: 2rem;
 					border: 1px solid #8b7355; box-shadow: 0 4px 16px rgba(61, 40, 23, 0.35);'>
 			<h2 style='color: #e6dcc8; margin: 0; font-size: 2rem;'>
-				RECHERCHE TEST 12345
+				RECHERCHE
 			</h2>
 			<p style='color: #d6c6a8; margin-top: 0.5rem; font-size: 1.1rem;'>
 				Moteur de recherche Elasticsearch avec recherche floue et filtres avancés
@@ -130,17 +127,9 @@ def render_recherche(_df):
 		)
 
     if rechercher or query:
-        # DEBUG VISIBLE
-        st.error(f"DEBUG QUERY: '{query}'")
-
         with st.spinner("Recherche en cours dans Elasticsearch..."):
             filtres = {"prix_max": budget_max} if budget_max else None
             resultats = rechercher_avec_arrondissement(query or "", filtres=filtres, taille=100)
-
-        # DEBUG VISIBLE
-        if resultats:
-            arrs = list(set([r.get('arrondissement') for r in resultats[:10]]))
-            st.error(f"DEBUG RESULTATS: {len(resultats)} resultats, arrondissements: {arrs}")
 
         if not resultats:
             st.warning("Aucun résultat trouvé. Essayez une autre recherche.")
@@ -198,11 +187,11 @@ def render_recherche(_df):
             surface_moy = df_resultats["surface_reelle_bati"].mean()
             st.markdown(
 				f"""
-				<div style='background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+				<div style='background: linear-gradient(135deg, #8b5a2b 0%, #a67c52 100%);
 							padding: 1.5rem; border-radius: 12px; text-align: center;
-							box-shadow: 0 4px 12px rgba(2, 132, 199, 0.4);'>
+							box-shadow: 0 4px 12px rgba(139, 90, 43, 0.4);'>
 					<div style='font-size: 2.5rem; font-weight: 700; color: white;'>{surface_moy:.0f}m²</div>
-					<div style='color: #bae6fd; font-size: 0.9rem; margin-top: 0.3rem;'>Surface moyenne</div>
+					<div style='color: #f5efe6; font-size: 0.9rem; margin-top: 0.3rem;'>Surface moyenne</div>
 				</div>
 				""",
 				unsafe_allow_html=True,
@@ -224,14 +213,14 @@ def render_recherche(_df):
                         date_txt = date_val.strftime("%d/%m/%Y") if pd.notna(date_val) else "N/A"
                         st.markdown(
 							f"""
-							<div style='background: linear-gradient(135deg, #0f2f4f 0%, #1a3a52 100%);
+							<div style='background: linear-gradient(135deg, #3d2817 0%, #5b3a22 100%);
 										padding: 1rem; border-radius: 10px; margin-bottom: 0.8rem;
-										border-left: 4px solid #0ea5e9;
-										box-shadow: 0 2px 8px rgba(14, 165, 233, 0.2);'>
-								<div style='color: #0ea5e9; font-weight: 600; font-size: 1.1rem;'>
+										border-left: 4px solid #d4a574;
+										box-shadow: 0 2px 8px rgba(212, 165, 116, 0.2);'>
+								<div style='color: #d4a574; font-weight: 600; font-size: 1.1rem;'>
 									{row.get("type_local", "N/A")} - Paris {arr}ème
 								</div>
-								<div style='color: #94a3b8; font-size: 0.85rem; margin-top: 0.3rem;'>
+								<div style='color: #d6c6a8; font-size: 0.85rem; margin-top: 0.3rem;'>
 									Date: {date_txt}
 									&nbsp;&nbsp;|&nbsp;&nbsp;
 									Surface: {row.get("surface_reelle_bati", 0):.0f} m²
@@ -248,13 +237,13 @@ def render_recherche(_df):
                         prix_m2 = row.get("prix_m2", 0)
                         st.markdown(
 							f"""
-							<div style='background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+							<div style='background: linear-gradient(135deg, #a67c52 0%, #c8956a 100%);
 										padding: 1rem; border-radius: 10px; text-align: center;
-										box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);'>
+										box-shadow: 0 2px 8px rgba(212, 165, 116, 0.3);'>
 								<div style='font-size: 1.8rem; font-weight: 700; color: white;'>
 									{prix/1e6:.2f}M€
 								</div>
-								<div style='color: #e0f2fe; font-size: 0.8rem;'>
+								<div style='color: #f5efe6; font-size: 0.8rem;'>
 									{prix_m2:,.0f}€/m²
 								</div>
 							</div>
@@ -359,9 +348,7 @@ def render_recherche(_df):
 					height=600,
 				)
                 fig.update_layout(mapbox_style="carto-positron")
-                fig.update_traces(
-					marker={"opacity": 0.8, "line": {"width": 1, "color": "white"}}
-				)
+                fig.update_traces(marker={"opacity": 0.8})
                 styliser_fig(fig)
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -404,9 +391,9 @@ def render_recherche(_df):
         with col_ex1:
             st.markdown(
 				"""
-				<div style='background: #0f2f4f; padding: 1rem; border-radius: 8px; border: 1px solid #0ea5e9;'>
-					<div style='font-weight: 600; color: #0ea5e9; margin-bottom: 0.5rem;'>Par type</div>
-					<div style='color: #94a3b8; font-size: 0.9rem;'>
+				<div style='background: #3d2817; padding: 1rem; border-radius: 8px; border: 1px solid #d4a574;'>
+					<div style='font-weight: 600; color: #d4a574; margin-bottom: 0.5rem;'>Par type</div>
+					<div style='color: #d6c6a8; font-size: 0.9rem;'>
 						• appartement<br>
 						• maison<br>
 						• local commercial
@@ -419,9 +406,9 @@ def render_recherche(_df):
         with col_ex2:
             st.markdown(
 				"""
-				<div style='background: #0f2f4f; padding: 1rem; border-radius: 8px; border: 1px solid #06b6d4;'>
-					<div style='font-weight: 600; color: #06b6d4; margin-bottom: 0.5rem;'>Par localisation</div>
-					<div style='color: #94a3b8; font-size: 0.9rem;'>
+				<div style='background: #3d2817; padding: 1rem; border-radius: 8px; border: 1px solid #c8956a;'>
+					<div style='font-weight: 600; color: #c8956a; margin-bottom: 0.5rem;'>Par localisation</div>
+					<div style='color: #d6c6a8; font-size: 0.9rem;'>
 						• 16eme<br>
 						• 8eme arrondissement<br>
 						• 1er
@@ -434,9 +421,9 @@ def render_recherche(_df):
         with col_ex3:
             st.markdown(
 				"""
-				<div style='background: #0f2f4f; padding: 1rem; border-radius: 8px; border: 1px solid #2563eb;'>
-					<div style='font-weight: 600; color: #2563eb; margin-bottom: 0.5rem;'>Combinaisons</div>
-					<div style='color: #94a3b8; font-size: 0.9rem;'>
+				<div style='background: #3d2817; padding: 1rem; border-radius: 8px; border: 1px solid #b8860b;'>
+					<div style='font-weight: 600; color: #b8860b; margin-bottom: 0.5rem;'>Combinaisons</div>
+					<div style='color: #d6c6a8; font-size: 0.9rem;'>
 						• appartement 16eme<br>
 						• maison 5 pieces<br>
 						• vente 2024
