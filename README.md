@@ -2,31 +2,66 @@
 
 Projet réalisé par **Iris Carron** et **Cléo Detrez**, étudiantes en école d'ingénieurs, dans le cadre de l'unité Data Engineering (2025/2026).
 
-## Pourquoi ce projet
+Application web qui scrape automatiquement les transactions immobilières parisiennes et les bâtiments, les stocke en base de données, et les restitue sous forme de visualisations interactives : graphiques, cartes choroplèthes, indicateurs de synthèse et moteur de recherche Elasticsearch.
 
-Le marché immobilier parisien est l'un des plus dynamiques et complexes de France. Les prix varient fortement d'un arrondissement à l'autre, d'un type de bien à l'autre, et évoluent au fil du temps. Pourtant, ces données restent difficilement exploitables en l'état : elles sont dispersées sur des plateformes institutionnelles, volumineuses, et peu lisibles pour un utilisateur non technique.
+## Prérequis
 
-Nous avons choisi de scraper les données de l'API DVF+ du Cerema, qui expose les Demandes de Valeurs Foncières (transactions immobilières enregistrées par l'administration fiscale) pour l'ensemble du territoire français. Notre périmètre se concentre sur les 20 arrondissements de Paris.
+Docker et Docker Compose installés sur la machine. Un minimum de 4 Go de RAM est recommandé (Elasticsearch est gourmand en mémoire). Une connexion internet est requise pour le scraping des données.
 
-L'objectif est de proposer une application web complète qui collecte ces données automatiquement, les stocke dans une base de données, et les restitue sous forme de visualisations interactives : graphiques, cartes, indicateurs de synthèse et moteur de recherche. L'utilisateur peut ainsi explorer le marché parisien, comparer les prix entre arrondissements, observer les tendances, et rechercher des transactions spécifiques sans manipuler de données brutes.
+## Installation et lancement
 
-Le projet met en pratique l'ensemble des concepts abordés pendant l'unité : scraping de données depuis une source web, stockage en base de données relationnelle, création d'une application web en Python, affichage optimisé des données, conteneurisation des services avec Docker. Le scraping s'effectue en temps réel au lancement du projet, l'orchestration des services repose sur Docker Compose, et un moteur de recherche Elasticsearch est intégré pour la recherche avancée.
+```bash
+git clone <url-du-repo>
+cd Projet_data_engineering
+docker-compose up --build
+```
 
-## Origine des données
+L'application est ensuite accessible à l'adresse **http://localhost:8501**.
 
-Les données scrapées proviennent de l'API DVF+ du Cerema. Le Cerema (Centre d'études et d'expertise sur les risques, l'environnement, la mobilité et l'aménagement) met à disposition cette API au dessus de la base DVF publiée par la Direction Générale des Finances Publiques (DGFiP). La base DVF recense l'ensemble des transactions immobilières réalisées en France : prix de vente, date, type de bien, surface, nombre de pièces et localisation. Elle est mise à jour deux fois par an (avril et octobre) et disponible en open data sous licence ouverte Etalab.
+Au premier lancement, le scraping se lance automatiquement en deux phases. D'abord, les transactions immobilières sont scrapées depuis l'API DVF+ du Cerema pour les 20 arrondissements (**5 à 15 minutes**). Ensuite, les bâtiments sont scrapés depuis l'API BDNB (**5 à 30 minutes** selon la limite configurée). Une fois le scraping terminé, le dashboard Streamlit se lance.
 
-L'API expose le point d'accès "mutations" qui renvoie les données tabulaires de chaque transaction : prix, date, surface, type de bien, arrondissement, etc. C'est le point d'accès utilisé au lancement de l'application pour collecter l'ensemble des transactions parisiennes.
+### Réinitialiser et relancer
 
-Les données des bâtiments proviennent de l'API BDNB (Base de Données Nationale des Bâtiments), accessible sur bdnb.io. Cette API fournit les géométries des bâtiments parisiens ainsi que des informations complémentaires (année de construction, classe DPE, matériaux, etc.). Ces géométries permettent d'afficher les polygones individuels des immeubles sur la carte.
+Pour repartir de zéro (vider la base et relancer le scraping complet) :
 
-En complément, les contours géographiques des 20 arrondissements de Paris sont téléchargés depuis la plateforme Open Data de la Ville de Paris (opendata.paris.fr) sous forme de GeoJSON, et servent à l'affichage de la carte choroplèthe.
+```bash
+docker-compose down -v
+docker-compose up --build
+```
 
-## Scraping et temps de collecte
+La commande `down -v` supprime les containers et les volumes (base de données, index Elasticsearch). La commande `up --build` reconstruit l'image et relance l'ensemble du pipeline.
 
-Le scraping s'effectue automatiquement au lancement de l'application si la base de données est vide. Le scraper interroge l'API DVF+ pour chacun des 20 arrondissements de Paris (codes INSEE 75101 à 75120), en paginant automatiquement les résultats par lots de 500. Un mécanisme de retry avec backoff exponentiel gère les erreurs réseau.
+### Alternative : charger les bâtiments depuis le cadastre local
 
-Le scraping se déroule en deux phases. D'abord, les transactions immobilières sont collectées depuis l'API DVF+ du Cerema (**5 à 15 minutes**). Ensuite, les bâtiments sont collectés depuis l'API BDNB (**5 à 30 minutes** selon la limite configurée). La collecte est suivie d'une phase de transformation (calcul du prix au m², nettoyage des valeurs aberrantes, normalisation des champs), puis du chargement en base PostgreSQL et de l'indexation dans Elasticsearch.
+Il est possible de charger les bâtiments depuis le fichier cadastral inclus dans le projet (`data/cadastre/cadastre-75-batiments.json`) au lieu de scraper l'API BDNB. Cela permet d'obtenir la couverture complète de Paris (110 000+ bâtiments) sans dépendre de l'API. Cette commande ne concerne que les bâtiments pour la carte ; les transactions doivent toujours être scrapées via le pipeline standard.
+
+```bash
+docker-compose exec app python etl/load_cadastre.py
+```
+
+A noter que le chargement de 110 000 bâtiments rend l'affichage de la carte en mode "Bâtiments" plus long à charger.
+
+### Services
+
+| Service | Port | Description |
+|---|---|---|
+| Application Streamlit | 8501 | Dashboard interactif |
+| PostgreSQL avec PostGIS | 5432 | Base de données relationnelle |
+| Elasticsearch | 9200 | Moteur de recherche |
+
+## Stack technique
+
+| Composant | Technologie | Version |
+|---|---|---|
+| Langage | Python | 3.11 |
+| Interface web | Streamlit | 1.30+ |
+| Base de données | PostgreSQL avec PostGIS | 16 |
+| Moteur de recherche | Elasticsearch | 8.11 |
+| Visualisation | Plotly | 5.18+ |
+| Traitement de données | Pandas, NumPy | 2.0+, 1.25+ |
+| ORM | SQLAlchemy | 2.0+ |
+| Conteneurisation | Docker et Docker Compose | |
+| Sources scrapées | API DVF+ Cerema, API BDNB | |
 
 ## Architecture du projet
 
@@ -62,19 +97,44 @@ Projet_data_engineering/
 └── data/                       GeoJSON des arrondissements
 ```
 
-## Stack technique
+### Diagramme d'architecture
 
-| Composant | Technologie | Version |
-|---|---|---|
-| Langage | Python | 3.11 |
-| Interface web | Streamlit | 1.30+ |
-| Base de données | PostgreSQL avec PostGIS | 16 |
-| Moteur de recherche | Elasticsearch | 8.11 |
-| Visualisation | Plotly | 5.18+ |
-| Traitement de données | Pandas, NumPy | 2.0+, 1.25+ |
-| ORM | SQLAlchemy | 2.0+ |
-| Conteneurisation | Docker et Docker Compose | |
-| Sources scrapées | API DVF+ Cerema, API BDNB | |
+```mermaid
+graph TD
+    subgraph Sources externes
+        DVF[API DVF+ Cerema]
+        BDNB[API BDNB]
+        ODP[Open Data Paris]
+    end
+
+    subgraph Docker Compose
+        subgraph ETL
+            S1[scraper.py] -->|Transactions| T[Transformation & nettoyage]
+            S2[scraper_bdnb.py] -->|Bâtiments| PG
+            T --> PG
+            T --> ES_IDX[Indexation]
+        end
+
+        subgraph Stockage
+            PG[(PostgreSQL / PostGIS)]
+            ES[(Elasticsearch)]
+        end
+
+        subgraph Dashboard Streamlit
+            PAGES[Pages: Accueil, Transactions, Prix, Carte, Recherche]
+        end
+
+        ES_IDX --> ES
+        PG --> PAGES
+        ES --> PAGES
+    end
+
+    DVF --> S1
+    BDNB --> S2
+    ODP -->|GeoJSON arrondissements| PAGES
+
+    PAGES -->|http://localhost:8501| USER[Utilisateur]
+```
 
 ## Pipeline ETL
 
@@ -158,53 +218,6 @@ Table `batiments` :
 | commune | TEXT | Commune INSEE |
 | geom | GEOMETRY | Géométrie PostGIS du bâtiment |
 | scraped_at | TIMESTAMP | Date de collecte |
-
-## Prérequis
-
-L'application nécessite Docker et Docker Compose installés sur la machine. Un minimum de 4 Go de RAM est recommandé, Elasticsearch étant gourmand en mémoire. Une connexion internet est requise pour le scraping des données et l'affichage des fonds de carte.
-
-## Installation et lancement
-
-### Lancement standard avec Docker Compose
-
-```bash
-git clone <url-du-repo>
-cd Projet_data_engineering
-docker-compose up --build
-```
-
-L'application est ensuite accessible à l'adresse **http://localhost:8501**.
-
-Au premier lancement, les images Docker sont téléchargées, Elasticsearch démarre (30 à 60 secondes), puis le scraping se lance automatiquement en deux phases. D'abord, les transactions immobilières sont scrapées depuis l'API DVF+ du Cerema pour les 20 arrondissements (**5 à 15 minutes**). Ensuite, les bâtiments sont scrapés depuis l'API BDNB (**5 à 30 minutes** selon la limite configurée). Une fois le scraping terminé, le dashboard Streamlit se lance et les données sont consultables.
-
-### Alternative : charger les bâtiments depuis le cadastre local
-
-Il est possible de charger les bâtiments depuis le fichier cadastral inclus dans le projet (`data/cadastre/cadastre-75-batiments.json`) au lieu de scraper l'API BDNB. Cela permet d'obtenir la couverture complète de Paris (110 000+ bâtiments) sans dépendre de l'API. Cette commande ne concerne que les bâtiments pour la carte ; les transactions doivent toujours être scrapées via le pipeline standard.
-
-```bash
-docker-compose exec app python etl/load_cadastre.py
-```
-
-A noter que le chargement de 110 000 bâtiments rend l'affichage de la carte en mode "Bâtiments" plus long à charger.
-
-### Réinitialiser et relancer
-
-Pour repartir de zéro (vider la base et relancer le scraping complet) :
-
-```bash
-docker-compose down -v
-docker-compose up --build
-```
-
-La commande `down -v` supprime les containers et les volumes (base de données, index Elasticsearch). La commande `up --build` reconstruit l'image et relance l'ensemble du pipeline.
-
-### Services
-
-| Service | Port | Description |
-|---|---|---|
-| Application Streamlit | 8501 | Dashboard interactif |
-| PostgreSQL avec PostGIS | 5432 | Base de données relationnelle |
-| Elasticsearch | 9200 | Moteur de recherche |
 
 ## Variables d'environnement
 
